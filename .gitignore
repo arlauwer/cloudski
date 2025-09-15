@@ -2,7 +2,12 @@
 img/
 runs/
 stab/
-stab_old/
+
+#old
+old/
 
 # temp
 nohup.out
+
+# cache
+__pycache__/
