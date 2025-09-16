@@ -9,7 +9,8 @@ from pts.storedtable import writeStoredTable
 
 class Runs:
     def __init__(self, path=os.getcwd()):
-        self.runs_path = os.path.join(path, "runs")
+        self.cwd = path
+        self.runs_path = os.path.join(self.cwd, "runs")
         self.params_path = os.path.join(self.runs_path, "params.json")
 
         self.load_params()
@@ -18,75 +19,54 @@ class Runs:
     def load_params(self):
         if not os.path.exists(self.params_path):
             raise FileNotFoundError(f"Parameters file not found: {self.params_path}")
+
         with open(self.params_path) as f:
             self.json = json.load(f)
-
-        self.runs_dict = self.json['runs']
-        self.run_vals = list(self.runs_dict.values())
-        self.bins_dict = self.json['bins']
+        self.json_params = self.json['params']
+        self.num_runs = self.json['num_runs']
+        self.json_bins = self.json['bins']
 
     def create_grid(self):
-        # Consistent ordering of keys
-        keys = list(next(iter(self.run_vals)).keys())
-        # Unique sorted values for each key
-        vals = [sorted(set(p[k] for p in self.run_vals)) for k in keys]
+        self.grid = np.load(os.path.join(self.runs_path, "grid.npy"))
+        self.combos = self.grid.reshape(-1, self.grid.shape[-1])
 
-        # Shape: (len(keys), len(vals[0]), len(vals[1]), ...)
-        shape = tuple(len(v) for v in vals) + (len(keys),)
+    # DEPRECATED ### fix to use
+    # def filter(self, filter):
+    #     params = {}
+    #     for dirname, param in self.json_runs.items():
+    #         if any(param[key] not in mask for key, mask in filter.items()):
+    #             continue
 
-        # All parameter combinations values (same way make_sim_dirs made the params.json!!!)
-        self.combos = list(itertools.product(*vals))
+    #         params[dirname] = param
 
-        # Reshape combinations into a grid
-        self.grid = np.array(self.combos, dtype=float).reshape(shape)
-        self.grid = np.moveaxis(self.grid, -1, 0)  # Move len(keys) to the first axis
-
-    def filter(self, filter):
-        """
-        Filter the self.params dictionary based on the provided filter.
-        If a key is not present, it will be fully included.
-        """
-        params = {}
-        for dirname, param in self.runs_dict.items():
-            if any(param[key] not in mask for key, mask in filter.items()):
-                continue
-
-            params[dirname] = param
-
-        self.runs_dict = params
-        self.create_grid()
+    #     self.json_runs = params
+    #     self.create_grid()
 
     def load_runs(self, include_crashed=False):
-        """
-        Load all the runs present in the self.params dictionary.
-        Each run is represented by a Run object.
-        """
         self.runs = []
-        for dirname, param in self.runs_dict.items():
-            full_path = os.path.join(self.runs_path, dirname)
-
-            run = Run(full_path, param)
+        for r in range(self.num_runs):
+            path = os.path.join(self.runs_path, f"run{r:05d}")
+            run = Run(path)
             if run.crashed() and not include_crashed:
-                print(f"Run {dirname} has crashed!")
+                print(f"Run {path} has crashed!")
                 continue
 
             self.runs.append(run)
 
     def convert_to_stab(self):
-        num_bins = self.bins_dict['num_bins']
+        num_bins = self.json_bins['num_bins']
 
         ions = np.arange(numIons, dtype=int)
         wo, inRange_o = self.runs[0].load_opac_wav()
         we, inRange_e = self.runs[0].load_emis_wav()
 
-        keys = list(next(iter(self.run_vals)).keys())
+        keys = list(self.json_params.keys())
         other_keys = keys[:-num_bins]
         bin_keys = keys[-num_bins:]
 
-        others = {k: self.grid[i, *(slice(None) if j == i else 0 for j in range(len(keys)))]
-                  for i, k in enumerate(other_keys)}
-        bins = {k: self.grid[j, *(slice(None) if jj == j else 0 for jj in range(len(keys)))]
-                for j, k in enumerate(bin_keys, start=len(other_keys))}
+        vals = [np.array(v) for v in self.json_params.values()]
+        other_vals = vals[:-num_bins]
+        bin_vals = vals[-num_bins:]
 
         param_shape = self.grid.shape[1:]
 
@@ -101,23 +81,26 @@ class Runs:
             opac[:, *idx] = run.load_opac(inRange_o)
             emis[:, *idx] = run.load_emis(inRange_e)
 
+        stab_dir = os.path.join(self.cwd, "stab")
+        os.makedirs(stab_dir, exist_ok=True)
+
         writeStoredTable(
-            "stab/temp.stab",
-            ["n", "Z"] + bin_keys,
+            os.path.join(stab_dir, "temp.stab"),
+            other_keys + bin_keys,
             ["1/m3", "1"] + ["W/m2"]*num_bins,
             ["lin", "lin"] + ["log"]*num_bins,
-            list(others.values()) + list(bins.values()),
+            other_vals + bin_vals,
             ["temp"],
             ["K"],
             ["lin"],
             [temperature])
 
         writeStoredTable(
-            "stab/abun.stab",
-            ["ion", "n", "Z"] + bin_keys,
+            os.path.join(stab_dir, "abun.stab"),
+            ["ion"] + other_keys + bin_keys,
             ["1", "1/m3", "1"] + ["W/m2"]*num_bins,
             ["lin", "lin", "lin"] + ["log"]*num_bins,
-            [ions] + list(others.values()) + list(bins.values()),
+            [ions] + other_vals + bin_vals,
             ["abun"],
             ["1/m3"],
             ["lin"],
@@ -125,11 +108,11 @@ class Runs:
         )
 
         writeStoredTable(
-            "stab/opac.stab",
-            ["lam", "n", "Z"] + bin_keys,
+            os.path.join(stab_dir, "opac.stab"),
+            ["lam"] + other_keys + bin_keys,
             ["m", "1/m3", "1"] + ["W/m2"]*num_bins,
             ["log", "lin", "lin"] + ["log"]*num_bins,
-            [wo] + list(others.values()) + list(bins.values()),
+            [wo] + other_vals + bin_vals,
             ["opac"],
             ["1/m"],
             ["lin"],
@@ -137,32 +120,24 @@ class Runs:
         )
 
         writeStoredTable(
-            "stab/emis.stab",
-            ["lam", "n", "Z"] + bin_keys,
+            os.path.join(stab_dir, "emis.stab"),
+            ["lam"] + other_keys + bin_keys,
             ["m", "1/m3", "1"] + ["W/m2"]*num_bins,
             ["log", "lin", "lin"] + ["log"]*num_bins,
-            [we] + list(others.values()) + list(bins.values()),
+            [we] + other_vals + bin_vals,
             ["emis"],
             ["W/m3"],
             ["lin"],
             [emis]
         )
 
-    def find_crashed_runs(self):
-        crashed = []
-
-        for run in self.runs:
-            if run.crashed():
-                print(f"Run {run.dirpath} has crashed.")
-                crashed.append(run.dirpath)
 
 #################### RUN ####################
 
 
 class Run:
-    def __init__(self, dirpath, params):
+    def __init__(self, dirpath):
         self.dirpath = dirpath
-        self.params = params
 
     def crashed(self):
         if not os.path.isdir(self.dirpath):
@@ -259,63 +234,3 @@ class Run:
                     split = line.split()
                     sed_data.append([float(split[0]), float(split[1])])
             return np.array(sed_data)
-
-    def plot_sed(self, ax):
-        ax.set_xlabel("$E$ (eV)")
-        ax.set_ylabel("$J_\\nu$ (erg/s/cm2/Hz)")
-        sed = self.load_sed()
-        E = sed[:, 0]
-        J_nu = sed[:, 1]
-        ax.plot(E, J_nu, label="SED", color='blue', marker='o')
-        ax.legend()
-
-    def plot_con(self, ax):
-        ax.set_xlabel("$E$ (eV)")
-        ax.set_ylabel("$J_\\lambda$ (erg/s/cm2/m)")
-        ax.set_xscale("log")
-        ax.set_yscale("log")
-
-        con = self.load_con()
-        E = con[:, 0]  # energy in eV
-
-        # t = self.load_emis2()
-
-        # convert 4pi nu J_nu = 4pi lam J_lam -> J_lam (erg/s/cm2 -> W/m2/m)
-        m = meV / E
-        factor = cts / m / (4 * np.pi)
-        # factor = 1
-
-        # FOR SOME REASON THE FACTOR IS STILL OFF BY 13.59 WHICH IS VERY CLOSE TO 1 RYDBERG???
-
-        # ax.plot(E, con[:, 1] * factor, label="Incident", color='blue', linestyle='--', linewidth=0.5)
-        # ax.plot(E, con[:, 2] * factor, label="Trans", color='orange', linestyle=':', linewidth=0.5)
-        ax.plot(E, con[:, 3] * factor, label="Diffuse", color='green', linestyle='-', linewidth=0.2)
-        # ax.plot(E, t)
-        # ax.plot(E, con[:, 4] * factor, label="Net Trans", color='red', linestyle=':', linewidth=0.5)
-        # ax.plot(E, con[:, 5] * factor, label="Reflected", color='purple', linestyle=':', linewidth=0.5)
-        # ax.plot(E, con[:, 6] * factor, label="Total", color='black', linestyle='-', linewidth=0.5)
-        ax.legend()
-
-    def plot_opt(self, ax):
-        ax.set_xlabel("E (eV)")
-        ax.set_ylabel("Emissivity (W/m3) and Opacity (1/m)")
-        ax.set_xscale("log")
-        ax.set_yscale("log")
-
-        opt = self.load_emis()
-        wav = opt[:, 0]
-        E = meV / wav  # eV
-        emis = opt[:, 1]  # erg/s/cm3
-        kappa_abs = opt[:, 2]
-        kappa_sca = opt[:, 3]
-
-        j_lambda = emis / (4 * np.pi) / wav  # W/m3/m
-        j_bol = np.trapz(j_lambda, wav)  # W/m3
-        vol = 1.175e50  # m3
-        L_bol = j_bol * vol
-        print(f"L_bol = {L_bol:.3e} W = {L_bol/3.828e26:.3e} L_sun")
-
-        ax.plot(E, emis, label="Emissivity", color='blue', linestyle='-')
-        # ax.plot(E, kappa_abs, label="Absorption", color='orange', linestyle='--')
-        # ax.plot(E, kappa_sca, label="Scattering", color='green', linestyle=':')
-        ax.legend()

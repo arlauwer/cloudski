@@ -3,8 +3,9 @@ import matplotlib as mpl
 from matplotlib.widgets import Slider
 
 
-def plot_single(ax, stab, xquant, yquant, fixed=None, axisLabels=True, logScale=True, **kwargs):
+def plot_single(ax, stab, xquant, fixed=None, **kwargs):
     x = stab[xquant].value
+    yquant = stab['quantityNames'][0]
     y = stab[yquant]
 
     fixed = fixed or {}
@@ -21,17 +22,16 @@ def plot_single(ax, stab, xquant, yquant, fixed=None, axisLabels=True, logScale=
 
     ax.plot(x, yi.value, **kwargs)
 
-    if logScale:
-        ax.set_xscale("log")
-        ax.set_yscale("log")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
 
-    if axisLabels:
-        ax.set_xlabel(f"{xquant} [{stab['axisUnits'][stab['axisNames'].index(xquant)]}]")
-        ax.set_ylabel(f"{yquant} [{stab['quantityUnits'][stab['quantityNames'].index(yquant)]}]")
+    ax.set_xlabel(f"{xquant} [{stab['axisUnits'][stab['axisNames'].index(xquant)]}]")
+    ax.set_ylabel(f"{yquant} [{stab['quantityUnits'][stab['quantityNames'].index(yquant)]}]")
 
 
-def plot_sweep(ax, stab, xquant, yquant, coloraxis, fixed=None, sm=None, axisLabels=True, logScale=True, **kwargs):
+def plot_sweep(ax, stab, xquant, coloraxis, fixed=None, sm=None, **kwargs):
     x = stab[xquant].value
+    yquant = stab['quantityNames'][0]
     y = stab[yquant]
 
     cvals = stab[coloraxis].value
@@ -55,13 +55,11 @@ def plot_sweep(ax, stab, xquant, yquant, coloraxis, fixed=None, sm=None, axisLab
         yi = y[tuple(slicer)]
         ax.plot(x, yi.value, color=cmap(norm(c)), **kwargs)
 
-    if logScale:
-        ax.set_xscale("log")
-        ax.set_yscale("log")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
 
-    if axisLabels:
-        ax.set_xlabel(f"{xquant} [{stab['axisUnits'][stab['axisNames'].index(xquant)]}]")
-        ax.set_ylabel(f"{yquant} [{stab['quantityUnits'][stab['quantityNames'].index(yquant)]}]")
+    ax.set_xlabel(f"{xquant} [{stab['axisUnits'][stab['axisNames'].index(xquant)]}]")
+    ax.set_ylabel(f"{yquant} [{stab['quantityUnits'][stab['quantityNames'].index(yquant)]}]")
 
     if sm is None:
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
@@ -72,8 +70,7 @@ def plot_sweep(ax, stab, xquant, yquant, coloraxis, fixed=None, sm=None, axisLab
         sm.set_norm(norm)
         return sm
 
-# OLD NOT USED
-# def interactive_bin_plot(tab, xaxis, yquant, sweep_bin, params):
+# def interactive_bin_plot(stab, xquant, yquant, sweep_bin, params):
 #     bin_axes = [k for k in params if k.startswith("bin") and k != sweep_bin]
 #     n_sliders = len(bin_axes)
 
@@ -84,7 +81,7 @@ def plot_sweep(ax, stab, xquant, yquant, coloraxis, fixed=None, sm=None, axisLab
 #     plt.subplots_adjust(left=0.25, bottom=bottom_margin)
 
 #     fixed = {b: 0 for b in bin_axes}
-#     sm = plot_sweep(ax, tab, xaxis, yquant, sweep_bin, fixed=fixed)
+#     sm = plot_sweep(ax, stab, xquant, yquant, sweep_bin, fixed=fixed)
 
 #     ax.set_xscale("log")
 #     ax.set_yscale("log")
@@ -99,7 +96,7 @@ def plot_sweep(ax, stab, xquant, yquant, coloraxis, fixed=None, sm=None, axisLab
 
 #     def update(val):
 #         fixed = {b: int(sliders[b].val) for b in bin_axes}
-#         plot_sweep(ax, tab, xaxis, yquant, sweep_bin, fixed=fixed, sm=sm)
+#         plot_sweep(ax, stab, xquant, yquant, sweep_bin, fixed=fixed, sm=sm)
 #         ax.set_xscale("log")
 #         ax.set_yscale("log")
 #         ax.set_ylim(1e-24, 1e-8)

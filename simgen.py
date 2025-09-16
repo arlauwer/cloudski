@@ -56,17 +56,18 @@ def make_sim_dirs(bins, params, path=os.getcwd()):
     # list all parameter combinations
     keys = list(params.keys())
     vals = list(params.values())
-    combos = list(itertools.product(*vals))
+    combos = np.array(list(itertools.product(*vals)))
+    num_runs = combos.shape[0]
 
     # params.json structure
     json_dict = {
         "params": params,
+        "num_runs": num_runs,
         "bins": {
             "edges": bins.edges,  # eV
             "widths": bins.widths,  # meter
             "num_bins": bins.num_bins
-        },
-        "runs": {}
+        }
     }
 
     # read template for sim.in
@@ -74,9 +75,9 @@ def make_sim_dirs(bins, params, path=os.getcwd()):
     with open(template_path) as f:
         template = f.read()
 
-    for idx, combo in enumerate(combos):
+    for r, combo in enumerate(combos):
         # create run directory
-        run_name = f"run{idx:05d}"
+        run_name = f"run{r:05d}"
         run_dir = os.path.join(run_path, run_name)
         sed_dir = os.path.join(run_dir, "SED")
 
@@ -93,7 +94,12 @@ def make_sim_dirs(bins, params, path=os.getcwd()):
         with open(os.path.join(run_dir, "sim.in"), "w") as f:
             f.write(template)
 
-        json_dict["runs"][run_name] = combo_dict
+    # Shape: (len(keys), len(vals[0]), len(vals[1]), ...)
+    shape = tuple(len(v) for v in vals) + (len(keys),)
+    grid = np.array(combos, dtype=float).reshape(shape)
+    grid = np.moveaxis(grid, -1, 0)  # Move len(keys) to the first axis
+    np.save(os.path.join(run_path, "grid.npy"), grid)
 
+    # save params.json
     with open(os.path.join(run_path, "params.json"), "w") as f:
         json.dump(json_dict, f, indent=2)
