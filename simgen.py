@@ -6,7 +6,7 @@ from .constants import *
 from .bins import Bins
 
 
-def make_SED(path, bins, params):
+def calc_sed(bins, param):
     # bin edges and widths
     edges = bins.edges
     num_bins = bins.num_bins
@@ -14,25 +14,34 @@ def make_SED(path, bins, params):
 
     # leftmost edge
     E = [edges[0]]
-    J_lambda = [params['bin0'] / widths[0]]
-    J = params['bin0']
+    J_lambda = [param['bin0'] / widths[0]]
+    J = param['bin0']
 
     # inner edges
     for i in range(1, num_bins):
-        J += params[f'bin{i}']
-        J_flat = params[f'bin{i}'] / widths[i]
         E += [edges[i] * 1.001, edges[i] * 0.999]
+        J_flat = param[f'bin{i}'] / widths[i]  # flat W/m2/m
         J_lambda += [J_lambda[-1], J_flat]
+        J += param[f'bin{i}']
 
     # rightmost edge
     E += [edges[-1]]
     J_lambda += [J_lambda[-1]]
 
-    # convert to cloudy units
+    # convert to array
     E = np.array(E, dtype=float)
     J_lambda = np.array(J_lambda, dtype=float)
+
+    # convert to cloudy units
     m = meV / E
     J_nu = J_lambda / cts * m**2 / 3e8
+    J = 4 * np.pi * J / cts
+
+    return E, J_nu, J
+
+
+def make_SED(path, bins, params):
+    E, J_nu, J = calc_sed(bins, params)
 
     # write to file
     os.makedirs(path, exist_ok=True)
@@ -42,8 +51,7 @@ def make_SED(path, bins, params):
             f.write(f"{e:.6g} {j:.6g}" + (" units eV\n" if i == 0 else "\n"))
         f.write("**********\n")
 
-    # return integrated
-    J = 4 * np.pi * J / cts
+    # return total intensity in W/m2
     return J
 
 

@@ -1,4 +1,5 @@
 from .constants import *
+import numpy as np
 
 
 class Bins:
@@ -6,8 +7,8 @@ class Bins:
         # assert edges are descending
         for i in range(len(edges)-1):
             assert edges[i] > edges[i+1]
-            assert NonZeroRange[0] <= edges[i] <= NonZeroRange[1]
+            assert nonZeroRange[0] <= edges[i] <= nonZeroRange[1]
 
-        self.edges = edges
+        self.edges = np.asarray(edges)
         self.num_bins = len(edges)-1
         self.widths = [meV/edges[i+1] - meV/edges[i] for i in range(len(edges)-1)]

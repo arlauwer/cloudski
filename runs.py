@@ -1,9 +1,9 @@
 import os
 import re
 import json
-import itertools
 import numpy as np
 from .constants import *
+from .bins import *
 from pts.storedtable import writeStoredTable
 
 
@@ -22,9 +22,9 @@ class Runs:
 
         with open(self.params_path) as f:
             self.json = json.load(f)
-        self.json_params = self.json['params']
+        self.params = self.json['params']
         self.num_runs = self.json['num_runs']
-        self.json_bins = self.json['bins']
+        self.bins = Bins(self.json['bins']['edges'])  # should be the exact same bins
 
     def create_grid(self):
         self.grid = np.load(os.path.join(self.runs_path, "grid.npy"))
@@ -54,17 +54,17 @@ class Runs:
             self.runs.append(run)
 
     def convert_to_stab(self):
-        num_bins = self.json_bins['num_bins']
+        num_bins = self.bins.num_bins
 
         ions = np.arange(numIons, dtype=int)
         wo, inRange_o = self.runs[0].load_opac_wav()
         we, inRange_e = self.runs[0].load_emis_wav()
 
-        keys = list(self.json_params.keys())
+        keys = list(self.params.keys())
         other_keys = keys[:-num_bins]
         bin_keys = keys[-num_bins:]
 
-        vals = [np.array(v) for v in self.json_params.values()]
+        vals = [np.array(v) for v in self.params.values()]
         other_vals = vals[:-num_bins]
         bin_vals = vals[-num_bins:]
 
@@ -156,7 +156,7 @@ class Run:
 
     def load_opac_wav(self):
         E = np.loadtxt(os.path.join(self.dirpath, "sim.opac"), usecols=0)
-        idx = np.where((E >= NonZeroRange[0]) & (E <= NonZeroRange[1]))[0][::-1]
+        idx = np.where((E >= nonZeroRange[0]) & (E <= nonZeroRange[1]))[0][::-1]
         return meV / E[idx], idx
 
     def load_opac(self, idx):
@@ -165,7 +165,7 @@ class Run:
 
     def load_emis_wav(self):
         E = np.loadtxt(os.path.join(self.dirpath, "sim.con"), usecols=(0))
-        idx = np.where((E >= NonZeroRange[0]) & (E <= NonZeroRange[1]))[0][::-1]
+        idx = np.where((E >= nonZeroRange[0]) & (E <= nonZeroRange[1]))[0][::-1]
         E = E[idx]
         return meV / E, idx  # wavelength in m
 

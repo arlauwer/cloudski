@@ -3,7 +3,7 @@ c = 2.99792458e8  # m/s
 meV = 1.23984193e-6  # m <-> eV
 Ryd = 13.6057039763  # eV
 cts = 1e-7 * 1e4  # Cloudy -> SKIRT
-NonZeroRange = (1e-1, 1e5)
+nonZeroRange = (1e-1, 1e5)  # range used to limit the opac/emis
 atomic_number = {
     'H': 1, 'He': 2, 'Li': 3, 'Be': 4, 'B': 5, 'C': 6, 'N': 7, 'O': 8,
     'F': 9, 'Ne': 10, 'Na': 11, 'Mg': 12, 'Al': 13, 'Si': 14, 'P': 15,
