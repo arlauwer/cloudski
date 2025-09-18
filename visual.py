@@ -2,7 +2,49 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.widgets import Slider
 from cloudy_manager import simgen, Bins
+from cloudy_manager.constants import meV
 import numpy as np
+
+
+class Plot:
+    def __init__(self, ax, stab, xquant, **kwargs):
+        self.ax = ax
+        self.stab = stab
+        self.xquant = xquant
+        self.kwargs = kwargs
+
+        self.yquant = stab['quantityNames'][0]
+        self.x = stab[self.xquant].value
+        self.y = stab[self.yquant].value
+
+        self.axis_names = list(stab['axisNames'])
+
+        self.xindex = self.axis_names.index(self.xquant)
+        self.xunit = self.stab['axisUnits'][self.xindex]
+        self.yindex = self.stab['quantityNames'].index(self.yquant)
+        self.yunit = self.stab['quantityUnits'][self.yindex]
+
+    def slice(self, indices):
+        slicer = []
+        for axisName in self.axis_names:
+            if axisName == self.xquant:
+                slicer.append(slice(None))
+            elif axisName in indices:
+                slicer.append(indices[axisName])
+            else:
+                raise ValueError(f"Axis {axisName} not fixed or not a bin: {axisName}")
+        return tuple(slicer)
+
+    def draw(self):
+        self.ax.plot(self.x, self.y, **self.kwargs)
+
+    def set_labels(self):
+        self.ax.set_xlabel(f"{self.xquant} [{self.xunit}]")
+        self.ax.set_ylabel(f"{self.yquant} [{self.yunit}]")
+
+    def set_scales(self, xscale='log', yscale='log'):
+        self.ax.set_xscale(xscale)
+        self.ax.set_yscale(yscale)
 
 
 def plot_single(ax, stab, xquant, fixed, **kwargs):
@@ -71,14 +113,17 @@ def plot_sweep(ax, stab, xquant, coloraxis, fixed, sm=None, **kwargs):
         return sm
 
 
+
+
+
 def plot_with_rad(fig, stab1, stab2, edges, params, xquant, fixed, **kwargs):
     # --- prepare data and axes ---
     yquant1 = stab1['quantityNames'][0]
     yquant2 = stab2['quantityNames'][0]
-    x1 = stab1[xquant].value
-    x2 = stab2[xquant].value
-    y1 = stab1[yquant1].value
-    y2 = stab2[yquant2].value
+    x1 = meV / stab1[xquant].value
+    x2 = meV / stab2[xquant].value
+    y1 = stab1[yquant1].value[::-1]
+    y2 = stab2[yquant2].value[::-1]
     axis_names = list(stab1['axisNames'])
     if axis_names != list(stab2['axisNames']):
         raise ValueError("stab1 and stab2 must have the same axisNames")
@@ -96,26 +141,21 @@ def plot_with_rad(fig, stab1, stab2, edges, params, xquant, fixed, **kwargs):
     if edges.size != num_bins + 1:
         raise ValueError(f"edges length must be num_bins+1 ({num_bins+1}), got {edges.size}")
 
-    # allowed arrays for each bin (as numpy arrays)
-    bin_allowed = [np.asarray(params[k]) for k in bin_keys]
+    def get_bin_index(bin_key):
+        return int(bin_key[3:])
 
-    # initial value for each bin: choose middle element (more sensible than first)
-    current_vals = [arr[0] for arr in bin_allowed]
+    # possible values for each bin
+    bin_vals = [np.asarray(params[k]) for k in bin_keys]
+
+    # initial value for each bin = first value
+    current_vals = [bin_val[0] for bin_val in bin_vals]
 
     # centers for marker placement (geometric mean for log spacing)
     centers = np.sqrt(edges[:-1] * edges[1:])
 
     # --- helper to find index for a chosen bin value inside params[binKey] ---
-    def find_value_index(arr, val):
-        arr = np.asarray(arr)
-        # try exact/isclose match first
-        idxs = np.where(np.isclose(arr, val, rtol=1e-8, atol=1e-12))[0]
-        if idxs.size:
-            return int(idxs[0])
-        # fallback to nearest in log space if positive else linear nearest
-        if np.all(arr > 0) and val > 0:
-            return int(np.argmin(np.abs(np.log10(arr) - np.log10(val))))
-        return int(np.argmin(np.abs(arr - val)))
+    def find_value_index(bin_vals, current_vals):
+        return int(np.argmin(np.abs(np.log10(bin_vals) - np.log10(current_vals))))
 
     # --- initial slicer and draw ax1/ax2 ---
     def make_slicer():
@@ -126,6 +166,9 @@ def plot_with_rad(fig, stab1, stab2, edges, params, xquant, fixed, **kwargs):
             elif axisName in fixed:
                 sl.append(fixed[axisName])
             elif axisName in bin_keys:
+                bin_vals = params[axisName]
+
+                # idx = int(np.argmin(np.abs(np.log10(bin_vals) - np.log10(current_vals))))
                 idx = find_value_index(params[axisName], current_vals[bin_keys.index(axisName)])
                 sl.append(idx)
             else:
@@ -133,11 +176,11 @@ def plot_with_rad(fig, stab1, stab2, edges, params, xquant, fixed, **kwargs):
         return tuple(sl)
 
     slicer = make_slicer()
-    yline1 = np.asarray(y1[slicer])
-    yline2 = np.asarray(y2[slicer])
+    yline1 = np.asarray(y1[slicer][::-1])
+    yline2 = np.asarray(y2[slicer][::-1])
 
     # left plot
-    ax1_line, = ax1.plot(x1, yline1, lw=1.5)
+    ax1_line, = ax1.plot(x1, yline1, **kwargs)
     ax1.set_xscale('log')
     ax1.set_yscale('log')
     ax1.set_title(f"{yquant1}")
@@ -145,7 +188,7 @@ def plot_with_rad(fig, stab1, stab2, edges, params, xquant, fixed, **kwargs):
     ax1.set_ylabel(f"{yquant1} [{stab1['quantityUnits'][stab1['quantityNames'].index(yquant1)]}]")
 
     # right plot
-    ax2_line, = ax2.plot(x2, yline2, lw=1.5)
+    ax2_line, = ax2.plot(x2, yline2, **kwargs)
     ax2.set_xscale('log')
     ax2.set_yscale('log')
     ax2.set_title(f"{yquant2}")
@@ -168,7 +211,7 @@ def plot_with_rad(fig, stab1, stab2, edges, params, xquant, fixed, **kwargs):
     markers = ax3.scatter(centers, vals, s=80, zorder=5, picker=True)
     ax3.set_xlim(edges[0], edges[-1])
     # set reasonable y limits from allowed sets
-    all_allowed = np.concatenate(bin_allowed)
+    all_allowed = np.concatenate(bin_vals)
     pos_allowed = all_allowed[all_allowed > 0]
     if pos_allowed.size:
         ax3.set_ylim(pos_allowed.min()*0.8, pos_allowed.max()*1.2)
@@ -190,8 +233,8 @@ def plot_with_rad(fig, stab1, stab2, edges, params, xquant, fixed, **kwargs):
     def update_main_plots():
         try:
             new_slicer = make_slicer()
-            new_y1 = np.asarray(y1[new_slicer])
-            new_y2 = np.asarray(y2[new_slicer])
+            new_y1 = np.asarray(y1[new_slicer][::-1])
+            new_y2 = np.asarray(y2[new_slicer][::-1])
         except Exception as e:
             print("update_main_plots: failed to index y with slicer:", e)
             return
@@ -204,7 +247,7 @@ def plot_with_rad(fig, stab1, stab2, edges, params, xquant, fixed, **kwargs):
             ymin, ymax = pos1.min()*0.8, pos1.max()*1.2
             cur_ymin, cur_ymax = ax1.get_ylim()
             ax1.set_ylim(min(ymin, cur_ymin), max(ymax, cur_ymax))
-        
+
         pos2 = new_y2[new_y2 > 0]
         if pos2.size:
             ymin, ymax = pos2.min()*0.8, pos2.max()*1.2
@@ -212,7 +255,6 @@ def plot_with_rad(fig, stab1, stab2, edges, params, xquant, fixed, **kwargs):
             ax2.set_ylim(min(ymin, cur_ymin), max(ymax, cur_ymax))
 
         fig.canvas.draw_idle()
-
 
     def on_press(event):
         if event.inaxes != ax3 or event.xdata is None or event.ydata is None:
@@ -233,7 +275,7 @@ def plot_with_rad(fig, stab1, stab2, edges, params, xquant, fixed, **kwargs):
             return
         idx = dragging['idx']
         # choose nearest allowed value in log space (if positive)
-        allowed = bin_allowed[idx]
+        allowed = bin_vals[idx]
         if event.ydata <= 0:
             # ignore negative or zero positions on log-scale
             return
