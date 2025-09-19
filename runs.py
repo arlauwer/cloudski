@@ -53,12 +53,14 @@ class Runs:
 
             self.runs.append(run)
 
-    def convert_to_stab(self):
+    def convert_to_stab(self, save_cont=False):
         num_bins = self.bins.num_bins
 
         ions = np.arange(numIons, dtype=int)
         wo, inRange_o = self.runs[0].load_opac_wav()
         we, inRange_e = self.runs[0].load_emis_wav()
+        if save_cont:
+            wc, inRange_c = self.runs[0].load_cont_wav()
 
         keys = list(self.params.keys())
         other_keys = keys[:-num_bins]
@@ -74,12 +76,16 @@ class Runs:
         abundance = np.zeros((numIons, *param_shape))
         opac = np.zeros((wo.size, *param_shape))
         emis = np.zeros((we.size, *param_shape))
+        if save_cont:
+            cont = np.zeros((wc.size, *param_shape, 4))  # incident, transmitted, emitted, total
 
         for run, idx in zip(self.runs, np.ndindex(param_shape)):
             temperature[idx] = run.load_temperature()
             abundance[:, *idx] = run.load_species()
             opac[:, *idx] = run.load_opac(inRange_o)
             emis[:, *idx] = run.load_emis(inRange_e)
+            if save_cont:
+                cont[:, *idx] = run.load_cont(inRange_c)
 
         stab_dir = os.path.join(self.cwd, "stab")
         os.makedirs(stab_dir, exist_ok=True)
@@ -131,6 +137,18 @@ class Runs:
             [emis]
         )
 
+        if save_cont:
+            writeStoredTable(
+                os.path.join(stab_dir, "cont.stab"),
+                ["lam"] + other_keys + bin_keys,
+                ["m", "1/m3", "1"] + ["W/m2"]*num_bins,
+                ["log", "lin", "lin"] + ["log"]*num_bins,
+                [wc] + other_vals + bin_vals,
+                ["inc", "tra", "emi", "tot"],
+                ["W/m2"],
+                ["lin"],
+                [cont]
+            )
 
 #################### RUN ####################
 
@@ -151,13 +169,20 @@ class Run:
 
         return False
 
-    def load_con(self):
-        return np.loadtxt(os.path.join(self.dirpath, "sim.con"), skiprows=1, usecols=(0, 1, 2, 3, 4, 5, 6), dtype=float)
+    def load_cont_wav(self):
+        E = np.loadtxt(os.path.join(self.dirpath, "sim.con"), usecols=(0))
+        idx = np.where((E >= nonZeroRange[0]) & (E <= nonZeroRange[1]))[0][::-1]
+        return meV / E[idx], idx  # wavelength in m
+
+    # incident, transmitted, emitted, total
+    def load_cont(self, idx):
+        cont = np.loadtxt(os.path.join(self.dirpath, "sim.con"), usecols=(1, 2, 3, 6))
+        return cont[idx, :] * cts  # erg/s/cm2 -> W/m2
 
     def load_opac_wav(self):
         E = np.loadtxt(os.path.join(self.dirpath, "sim.opac"), usecols=0)
         idx = np.where((E >= nonZeroRange[0]) & (E <= nonZeroRange[1]))[0][::-1]
-        return meV / E[idx], idx
+        return meV / E[idx], idx  # wavelength in m
 
     def load_opac(self, idx):
         abs = np.loadtxt(os.path.join(self.dirpath, "sim.opac"), usecols=2)

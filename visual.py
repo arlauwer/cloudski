@@ -113,17 +113,14 @@ def plot_sweep(ax, stab, xquant, coloraxis, fixed, sm=None, **kwargs):
         return sm
 
 
-
-
-
-def plot_with_rad(fig, stab1, stab2, edges, params, xquant, fixed, **kwargs):
+def plot_with_rad(fig, stab1, stab2, edges, params, xquant, **kwargs):
     # --- prepare data and axes ---
     yquant1 = stab1['quantityNames'][0]
     yquant2 = stab2['quantityNames'][0]
-    x1 = meV / stab1[xquant].value
-    x2 = meV / stab2[xquant].value
-    y1 = stab1[yquant1].value[::-1]
-    y2 = stab2[yquant2].value[::-1]
+    x1 = stab1[xquant].value
+    x2 = stab2[xquant].value
+    y1 = stab1[yquant1].value
+    y2 = stab2[yquant2].value
     axis_names = list(stab1['axisNames'])
     if axis_names != list(stab2['axisNames']):
         raise ValueError("stab1 and stab2 must have the same axisNames")
@@ -131,7 +128,7 @@ def plot_with_rad(fig, stab1, stab2, edges, params, xquant, fixed, **kwargs):
     # create axes (kept positions from your original layout)
     ax1 = fig.add_axes([0.10, 0.10, 0.35, 0.60])
     ax2 = fig.add_axes([0.55, 0.10, 0.35, 0.60])
-    ax3 = fig.add_axes([0.10, 0.75, 0.80, 0.20])
+    ax3 = fig.add_axes([0.10, 0.75, 0.60, 0.20])
 
     # --- bins handling ---
     bin_keys = [k for k in params.keys() if k.startswith('bin')]
@@ -140,6 +137,20 @@ def plot_with_rad(fig, stab1, stab2, edges, params, xquant, fixed, **kwargs):
         raise ValueError(f"Expected bin keys named bin0..binN; got {bin_keys}")
     if edges.size != num_bins + 1:
         raise ValueError(f"edges length must be num_bins+1 ({num_bins+1}), got {edges.size}")
+
+    # instead of "fixed", prepare sliders
+    sliders = {}
+
+    # position sliders in a vertical stack in top-right
+    slider_top = 0.95
+    slider_height = 0.03
+    for i, axisName in enumerate(axis_names):
+        if axisName == xquant or axisName in bin_keys:
+            continue
+        ax_slider = fig.add_axes([0.75, slider_top - i*slider_height, 0.20, 0.02])
+        nvals = stab1[axisName].size
+        sliders[axisName] = Slider(ax_slider, axisName, 0, nvals-1,
+                                   valinit=1, valstep=1)
 
     def get_bin_index(bin_key):
         return int(bin_key[3:])
@@ -163,21 +174,17 @@ def plot_with_rad(fig, stab1, stab2, edges, params, xquant, fixed, **kwargs):
         for axisName in axis_names:
             if axisName == xquant:
                 sl.append(slice(None))
-            elif axisName in fixed:
-                sl.append(fixed[axisName])
             elif axisName in bin_keys:
-                bin_vals = params[axisName]
-
-                # idx = int(np.argmin(np.abs(np.log10(bin_vals) - np.log10(current_vals))))
                 idx = find_value_index(params[axisName], current_vals[bin_keys.index(axisName)])
                 sl.append(idx)
             else:
-                raise ValueError(f"Axis {axisName} not fixed or not a bin: {axisName}")
+                # use slider value
+                sl.append(int(sliders[axisName].val))
         return tuple(sl)
 
     slicer = make_slicer()
-    yline1 = np.asarray(y1[slicer][::-1])
-    yline2 = np.asarray(y2[slicer][::-1])
+    yline1 = np.asarray(y1[slicer])
+    yline2 = np.asarray(y2[slicer])
 
     # left plot
     ax1_line, = ax1.plot(x1, yline1, **kwargs)
@@ -194,6 +201,11 @@ def plot_with_rad(fig, stab1, stab2, edges, params, xquant, fixed, **kwargs):
     ax2.set_title(f"{yquant2}")
     ax2.set_xlabel(f"{xquant} [{stab2['axisUnits'][stab2['axisNames'].index(xquant)]}]")
     ax2.set_ylabel(f"{yquant2} [{stab2['quantityUnits'][stab2['quantityNames'].index(yquant2)]}]")
+
+    for e in edges:
+        ax1.axvline(meV/e, color='gray', ls='--', lw=1)
+        ax2.axvline(meV/e, color='gray', ls='--', lw=1)
+        ax3.axvline(e, color='gray', ls='--', lw=1)
 
     # --- top histogram-like control (ax3) ---
     # build step arrays for plotting a histogram-like stepped line
@@ -233,8 +245,8 @@ def plot_with_rad(fig, stab1, stab2, edges, params, xquant, fixed, **kwargs):
     def update_main_plots():
         try:
             new_slicer = make_slicer()
-            new_y1 = np.asarray(y1[new_slicer][::-1])
-            new_y2 = np.asarray(y2[new_slicer][::-1])
+            new_y1 = np.asarray(y1[new_slicer])
+            new_y2 = np.asarray(y2[new_slicer])
         except Exception as e:
             print("update_main_plots: failed to index y with slicer:", e)
             return
@@ -297,7 +309,12 @@ def plot_with_rad(fig, stab1, stab2, edges, params, xquant, fixed, **kwargs):
     fig.canvas.mpl_connect('motion_notify_event', on_motion)
     fig.canvas.mpl_connect('button_release_event', on_release)
 
+    def slider_update(val):
+        update_main_plots()
+    for s in sliders.values():
+        s.on_changed(slider_update)
+
     # final initial draw
     update_main_plots()
     fig.canvas.draw_idle()
-    return ax1, ax2, ax3
+    return ax1, ax2, ax3, sliders
