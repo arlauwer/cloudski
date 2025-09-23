@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.widgets import Slider
-from cloudy_manager import simgen, Bins
 from cloudy_manager.constants import meV
 import numpy as np
 
@@ -113,7 +112,7 @@ def plot_sweep(ax, stab, xquant, coloraxis, fixed, sm=None, **kwargs):
         return sm
 
 
-def plot_with_rad(fig, stab1, stab2, edges, params, xquant, **kwargs):
+def plot_with_rad(fig, stab1, stab2, bins, params, xquant, **kwargs):
     # --- prepare data and axes ---
     yquant1 = stab1['quantityNames'][0]
     yquant2 = stab2['quantityNames'][0]
@@ -131,27 +130,49 @@ def plot_with_rad(fig, stab1, stab2, edges, params, xquant, **kwargs):
     ax3 = fig.add_axes([0.10, 0.75, 0.60, 0.20])
 
     # --- bins handling ---
-    edges = np.asarray(edges)
-    bin_keys = [k for k in params.keys() if k.startswith('bin')]
-    num_bins = len(bin_keys)
+    edges = np.asarray(bins.edges)
+    num_bins = bins.num_bins
+
+    keys = list(params.keys())
+    other_keys = keys[:-num_bins]
+    bin_keys = keys[-num_bins:]
+
+    vals = [np.array(v) for v in params.values()]
+    other_vals = vals[:-num_bins]
+    bin_vals = vals[-num_bins:]
+
     if any(k != f"bin{idx}" for idx, k in enumerate(bin_keys)):
         raise ValueError(f"Expected bin keys named bin0..binN; got {bin_keys}")
-    if edges.size != num_bins + 1:
-        raise ValueError(f"edges length must be num_bins+1 ({num_bins+1}), got {edges.size}")
+    if edges.size != len(bin_keys) + 1:
+        raise ValueError(f"edges length must be num_bins+1 ({len(bin_keys)+1}), got {edges.size}")
 
-    # instead of "fixed", prepare sliders
     sliders = {}
 
-    # position sliders in a vertical stack in top-right
-    slider_top = 0.95
-    slider_height = 0.03
-    for i, axisName in enumerate(axis_names):
+    slider_top = 0.9
+    slider_height = 0.1
+
+    i = 0
+    for axisName in axis_names:
         if axisName == xquant or axisName in bin_keys:
             continue
-        ax_slider = fig.add_axes([0.75, slider_top - i*slider_height, 0.20, 0.02])
+
+        # separate axis for ticks, placed slightly below
         nvals = stab1[axisName].size
+        ticks = [f"{p:.1e}" for p in params[axisName]]
+        ax_ticks = fig.add_axes([0.75, slider_top - i*slider_height - 0.001, 0.20, 0.02])
+        ax_ticks.set_xlim(0, nvals-1)
+        ax_ticks.set_xticks(range(nvals))
+        ax_ticks.set_xticklabels(ticks, rotation=45, fontsize=7)
+        ax_ticks.set_yticks([])
+        for spine in ["top", "left", "right"]:
+            ax_ticks.spines[spine].set_visible(False)
+
+        # main slider axis
+        ax_slider = fig.add_axes([0.75, slider_top - i*slider_height, 0.20, 0.02])
         sliders[axisName] = Slider(ax_slider, axisName, 0, nvals-1,
-                                   valinit=1, valstep=1)
+                                   valinit=0, valstep=1)
+
+        i += 1
 
     def get_bin_index(bin_key):
         return int(bin_key[3:])

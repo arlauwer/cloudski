@@ -181,7 +181,7 @@ class Run:
         cont = cont[idx]  # restrict to range
         m = meV / cont[:, 0] # wavelength in m
         nuJnu = cont[:, 1:] # erg/s/cm2
-        Jlambda = nuJnu / (4 * np.pi * m)  # erg/s/cm2/m
+        Jlambda = nuJnu / (4 * np.pi * m[:, None])  # erg/s/cm2/m
         return Jlambda * cts  # erg/s/cm2/m -> W/m2/m
 
     def load_opac_wav(self):
