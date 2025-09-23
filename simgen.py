@@ -67,22 +67,11 @@ def make_sim_dirs(bins, params, path=os.getcwd()):
     combos = np.array(list(itertools.product(*vals)))
     num_runs = combos.shape[0]
 
-    # params.json structure
-    json_dict = {
-        "params": params,
-        "num_runs": num_runs,
-        "bins": {
-            "edges": bins.edges,  # eV
-            "widths": bins.widths,  # meter
-            "num_bins": bins.num_bins
-        }
-    }
-
     # read template for sim.in
-    template_path = os.path.join(path, "template/sim.in")
-    with open(template_path) as f:
+    with open(os.path.join(path, "template/sim.in")) as f:
         template = f.read()
 
+    # create sim.in and SED for each run
     for r, combo in enumerate(combos):
         # create run directory
         run_name = f"run{r:05d}"
@@ -96,18 +85,28 @@ def make_sim_dirs(bins, params, path=os.getcwd()):
         J = make_SED(sed_dir, bins, combo_dict)
 
         # write sim.in
+        temp = template # reset template
         for k, v in combo_dict.items():
-            template = template.replace(f"{{{k}}}", str(v))
-        template = template.replace("{ins}", str(J))
+            temp = temp.replace(f"{{{k}}}", str(v))
+        temp = temp.replace("{ins}", str(J))
         with open(os.path.join(run_dir, "sim.in"), "w") as f:
-            f.write(template)
+            f.write(temp)
 
-    # Shape: (len(keys), len(vals[0]), len(vals[1]), ...)
-    shape = tuple(len(v) for v in vals) + (len(keys),)
+    # save grid.npy
+    shape = tuple(len(v) for v in vals) + (len(keys),) # (len(keys), len(vals[0]), len(vals[1]), ...)
     grid = np.array(combos, dtype=float).reshape(shape)
     grid = np.moveaxis(grid, -1, 0)  # Move len(keys) to the first axis
     np.save(os.path.join(run_path, "grid.npy"), grid)
 
     # save params.json
+    json_dict = {
+        "params": params,
+        "num_runs": num_runs,
+        "bins": {
+            "edges": bins.edges,  # eV
+            "widths": bins.widths,  # meter
+            "num_bins": bins.num_bins
+        }
+    }
     with open(os.path.join(run_path, "params.json"), "w") as f:
         json.dump(json_dict, f, indent=2)

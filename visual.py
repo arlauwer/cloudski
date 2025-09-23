@@ -131,6 +131,7 @@ def plot_with_rad(fig, stab1, stab2, edges, params, xquant, **kwargs):
     ax3 = fig.add_axes([0.10, 0.75, 0.60, 0.20])
 
     # --- bins handling ---
+    edges = np.asarray(edges)
     bin_keys = [k for k in params.keys() if k.startswith('bin')]
     num_bins = len(bin_keys)
     if any(k != f"bin{idx}" for idx, k in enumerate(bin_keys)):

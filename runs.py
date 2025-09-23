@@ -145,9 +145,9 @@ class Runs:
                 ["log", "lin", "lin"] + ["log"]*num_bins,
                 [wc] + other_vals + bin_vals,
                 ["inc", "tra", "emi", "tot"],
-                ["W/m2"],
-                ["lin"],
-                [cont]
+                ["W/m2", "W/m2", "W/m2", "W/m2"],
+                ["lin", "lin", "lin", "lin"],
+                [cont[..., 0], cont[..., 1], cont[..., 2], cont[..., 3]]
             )
 
 #################### RUN ####################
@@ -176,8 +176,13 @@ class Run:
 
     # incident, transmitted, emitted, total
     def load_cont(self, idx):
-        cont = np.loadtxt(os.path.join(self.dirpath, "sim.con"), usecols=(1, 2, 3, 6))
-        return cont[idx, :] * cts  # erg/s/cm2 -> W/m2
+        # 4pi nuJnu in erg/s/cm2
+        cont = np.loadtxt(os.path.join(self.dirpath, "sim.con"), usecols=(0, 1, 2, 3, 6))
+        cont = cont[idx]  # restrict to range
+        m = meV / cont[:, 0] # wavelength in m
+        nuJnu = cont[:, 1:] # erg/s/cm2
+        Jlambda = nuJnu / (4 * np.pi * m)  # erg/s/cm2/m
+        return Jlambda * cts  # erg/s/cm2/m -> W/m2/m
 
     def load_opac_wav(self):
         E = np.loadtxt(os.path.join(self.dirpath, "sim.opac"), usecols=0)
