@@ -37,11 +37,11 @@ def calc_sed(bins, param):
     J_nu = J_lambda / cts * m**2 / 3e8
     J = 4 * np.pi * J / cts
 
-    return E, J_nu, J
+    return E, J_lambda, J_nu, J
 
 
 def make_SED(path, bins, params):
-    E, J_nu, J = calc_sed(bins, params)
+    E, J_lambda, J_nu, J = calc_sed(bins, params)
 
     # write to file
     os.makedirs(path, exist_ok=True)

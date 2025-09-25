@@ -23,24 +23,22 @@ class Runs:
         with open(self.params_path) as f:
             self.json = json.load(f)
         self.params = self.json['params']
+        self.num_params = len(self.params)
         self.num_runs = self.json['num_runs']
         self.bins = Bins(self.json['bins']['edges'])  # should be the exact same bins
 
     def create_grid(self):
         self.grid = np.load(os.path.join(self.runs_path, "grid.npy"))
-        self.combos = self.grid.reshape(-1, self.grid.shape[-1])
 
-    # DEPRECATED ### fix to use
-    # def filter(self, filter):
-    #     params = {}
-    #     for dirname, param in self.json_runs.items():
-    #         if any(param[key] not in mask for key, mask in filter.items()):
-    #             continue
+    def get_param(self, run_idx):
+        if run_idx < 0 or run_idx >= self.num_runs:
+            raise IndexError("Run index out of range")
 
-    #         params[dirname] = param
+        idx = np.unravel_index(run_idx, self.grid.shape[1:])
+        # prepend slice(None) for the first axis (keys)
+        combo = self.grid[(slice(None),) + idx]
 
-    #     self.json_runs = params
-    #     self.create_grid()
+        return {key: val for key, val in zip(self.params.keys(), combo)}
 
     def load_runs(self, include_crashed=False):
         self.runs = []
@@ -154,14 +152,15 @@ class Runs:
 
 
 class Run:
-    def __init__(self, dirpath):
-        self.dirpath = dirpath
+    def __init__(self, path):
+        self.path = path
+        self.name = os.path.basename(path)
 
     def crashed(self):
-        if not os.path.isdir(self.dirpath):
+        if not os.path.isdir(self.path):
             return True
 
-        with open(os.path.join(self.dirpath, "sim.out"), "rb") as f:
+        with open(os.path.join(self.path, "sim.out"), "rb") as f:
             f.seek(-18, 2)
             last_chars = f.read().decode()
             if last_chars != "Cloudy exited OK]\n":
@@ -170,37 +169,37 @@ class Run:
         return False
 
     def load_cont_wav(self):
-        E = np.loadtxt(os.path.join(self.dirpath, "sim.con"), usecols=(0))
+        E = np.loadtxt(os.path.join(self.path, "sim.con"), usecols=(0))
         idx = np.where((E >= nonZeroRange[0]) & (E <= nonZeroRange[1]))[0][::-1]
         return meV / E[idx], idx  # wavelength in m
 
     # incident, transmitted, emitted, total
     def load_cont(self, idx):
         # 4pi nuJnu in erg/s/cm2
-        cont = np.loadtxt(os.path.join(self.dirpath, "sim.con"), usecols=(0, 1, 2, 3, 6))
+        cont = np.loadtxt(os.path.join(self.path, "sim.con"), usecols=(0, 1, 2, 3, 6))
         cont = cont[idx]  # restrict to range
-        m = meV / cont[:, 0] # wavelength in m
-        nuJnu = cont[:, 1:] # erg/s/cm2
+        m = meV / cont[:, 0]  # wavelength in m
+        nuJnu = cont[:, 1:]  # erg/s/cm2
         Jlambda = nuJnu / (4 * np.pi * m[:, None])  # erg/s/cm2/m
         return Jlambda * cts  # erg/s/cm2/m -> W/m2/m
 
     def load_opac_wav(self):
-        E = np.loadtxt(os.path.join(self.dirpath, "sim.opac"), usecols=0)
+        E = np.loadtxt(os.path.join(self.path, "sim.opac"), usecols=0)
         idx = np.where((E >= nonZeroRange[0]) & (E <= nonZeroRange[1]))[0][::-1]
         return meV / E[idx], idx  # wavelength in m
 
     def load_opac(self, idx):
-        abs = np.loadtxt(os.path.join(self.dirpath, "sim.opac"), usecols=2)
+        abs = np.loadtxt(os.path.join(self.path, "sim.opac"), usecols=2)
         return abs[idx] * 1e4  # 1/cm -> 1/m
 
     def load_emis_wav(self):
-        E = np.loadtxt(os.path.join(self.dirpath, "sim.con"), usecols=(0))
+        E = np.loadtxt(os.path.join(self.path, "sim.con"), usecols=(0))
         idx = np.where((E >= nonZeroRange[0]) & (E <= nonZeroRange[1]))[0][::-1]
         E = E[idx]
         return meV / E, idx  # wavelength in m
 
     def load_emis(self, idx):
-        con = np.loadtxt(os.path.join(self.dirpath, "sim.con"), usecols=(3, 8))
+        con = np.loadtxt(os.path.join(self.path, "sim.con"), usecols=(3, 8))
         diff_out, lin_out = con[:, 0], con[:, 1]
         emis = diff_out[idx] - lin_out[idx]  # 4pi nuJnu
         return emis * cts * 1e2 * 2  # erg/s/cm2 / 1cm -> W/m3
@@ -208,7 +207,7 @@ class Run:
         # perhaps spherical geometry in the save continuum emissivity? i.e. both sides of the cloud? -> so remove * 2
 
     def load_species(self):
-        species_path = os.path.join(self.dirpath, "sim.species")
+        species_path = os.path.join(self.path, "sim.species")
 
         def parse_species(col):
             match = re.match(r'^([A-Z][a-z]?)(\+)?(\d+)?$', col)
@@ -233,6 +232,9 @@ class Run:
         labels = header[keep_cols]
         data = np.loadtxt(species_path, comments='#', usecols=keep_cols)
 
+        if data.ndim > 1:
+            data = data.T
+
         # Prepare sorting keys: (Z, charge)
         sort_keys = []
         for col in labels:
@@ -252,15 +254,33 @@ class Run:
         return data[:numIons]
 
     def load_temperature(self):
-        overview = np.loadtxt(os.path.join(self.dirpath, "sim.ovr"), skiprows=1)
-        return overview[1]
+        overview = np.loadtxt(os.path.join(self.path, "sim.ovr"), skiprows=1, usecols=(1))
+        overview = np.atleast_1d(overview)
+        return overview
+        
+    def load_zones(self):
+        # radius, depth (center of zone), dr
+        zones = np.loadtxt(os.path.join(self.path, "sim.zones"), skiprows=1, usecols=(1, 2, 3))
+        if zones.ndim == 1:
+            zones = zones[np.newaxis, :]
 
-    def load_sed(self):
-        with open(os.path.join(self.dirpath, "SED/cf.sed"), "r") as f:
-            lines = f.readlines()
-            sed_data = []
-            for line in lines:
-                if line.strip() and not (line.startswith('#') or line.startswith('*')):
-                    split = line.split()
-                    sed_data.append([float(split[0]), float(split[1])])
-            return np.array(sed_data)
+        zones[:, 1] = np.cumsum(zones[:, 2])  # better definition of depth
+        return zones.T
+
+
+    def temperature_profile(self):
+        temp = self.load_temperature()
+        R, depth, dr = self.load_zones()
+        Rmin = R[0] + depth - dr
+        Rmax = R[0] + depth
+
+        if temp.shape[0] != Rmin.shape[0]:
+            raise ValueError(f"mismatch in number of zones: temperature has {temp.shape[0]} but zones has {Rmin.shape[0]}")
+
+        n = Rmin.shape[0]
+        R = np.zeros(2 * n)
+        T = np.zeros(2 * n)
+        for i in range(n):
+            R[2*i], R[2*i+1] = Rmin[i], Rmax[i]
+            T[2*i], T[2*i+1] = temp[i], temp[i]
+        return R, T

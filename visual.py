@@ -112,14 +112,18 @@ def plot_sweep(ax, stab, xquant, coloraxis, fixed, sm=None, **kwargs):
         return sm
 
 
-def plot_with_rad(fig, stab1, stab2, bins, params, xquant, **kwargs):
+def plot_with_rad(fig, stab1, stab2, bins, params, xquant, idy1=0, idy2=0, **kwargs):
     # --- prepare data and axes ---
-    yquant1 = stab1['quantityNames'][0]
-    yquant2 = stab2['quantityNames'][0]
+    yquant1 = stab1['quantityNames'][idy1]
+    yquant2 = stab2['quantityNames'][idy2]
     x1 = stab1[xquant].value
     x2 = stab2[xquant].value
     y1 = stab1[yquant1].value
     y2 = stab2[yquant2].value
+    min_y1 = np.nanmin(y1[y1 > 0])
+    max_y1 = np.nanmax(y1[y1 > 0])
+    min_y2 = np.nanmin(y2[y2 > 0])
+    max_y2 = np.nanmax(y2[y2 > 0])
     axis_names = list(stab1['axisNames'])
     if axis_names != list(stab2['axisNames']):
         raise ValueError("stab1 and stab2 must have the same axisNames")
@@ -127,7 +131,7 @@ def plot_with_rad(fig, stab1, stab2, bins, params, xquant, **kwargs):
     # create axes (kept positions from your original layout)
     ax1 = fig.add_axes([0.10, 0.10, 0.35, 0.60])
     ax2 = fig.add_axes([0.55, 0.10, 0.35, 0.60])
-    ax3 = fig.add_axes([0.10, 0.75, 0.60, 0.20])
+    ax3 = fig.add_axes([0.10, 0.77, 0.60, 0.18])
 
     # --- bins handling ---
     edges = np.asarray(bins.edges)
@@ -215,6 +219,7 @@ def plot_with_rad(fig, stab1, stab2, bins, params, xquant, **kwargs):
     ax1.set_title(f"{yquant1}")
     ax1.set_xlabel(f"{xquant} [{stab1['axisUnits'][stab1['axisNames'].index(xquant)]}]")
     ax1.set_ylabel(f"{yquant1} [{stab1['quantityUnits'][stab1['quantityNames'].index(yquant1)]}]")
+    ax1.set_ylim(min_y1*0.8, max_y1*1.2)
 
     # right plot
     ax2_line, = ax2.plot(x2, yline2, **kwargs)
@@ -223,6 +228,7 @@ def plot_with_rad(fig, stab1, stab2, bins, params, xquant, **kwargs):
     ax2.set_title(f"{yquant2}")
     ax2.set_xlabel(f"{xquant} [{stab2['axisUnits'][stab2['axisNames'].index(xquant)]}]")
     ax2.set_ylabel(f"{yquant2} [{stab2['quantityUnits'][stab2['quantityNames'].index(yquant2)]}]")
+    ax2.set_ylim(min_y2*0.8, max_y2*1.2)
 
     for e in edges:
         ax1.axvline(meV/e, color='gray', ls='--', lw=1)
@@ -276,18 +282,6 @@ def plot_with_rad(fig, stab1, stab2, bins, params, xquant, **kwargs):
         ax1_line.set_ydata(new_y1)
         ax2_line.set_ydata(new_y2)
 
-        pos1 = new_y1[new_y1 > 0]
-        if pos1.size:
-            ymin, ymax = pos1.min()*0.8, pos1.max()*1.2
-            cur_ymin, cur_ymax = ax1.get_ylim()
-            ax1.set_ylim(min(ymin, cur_ymin), max(ymax, cur_ymax))
-
-        pos2 = new_y2[new_y2 > 0]
-        if pos2.size:
-            ymin, ymax = pos2.min()*0.8, pos2.max()*1.2
-            cur_ymin, cur_ymax = ax2.get_ylim()
-            ax2.set_ylim(min(ymin, cur_ymin), max(ymax, cur_ymax))
-
         fig.canvas.draw_idle()
 
     def on_press(event):
@@ -324,6 +318,7 @@ def plot_with_rad(fig, stab1, stab2, bins, params, xquant, **kwargs):
             update_main_plots()
 
     def on_release(event):
+        on_motion(event)
         dragging['idx'] = None
 
     # connect events
