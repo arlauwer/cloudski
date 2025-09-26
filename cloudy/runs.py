@@ -30,6 +30,11 @@ class Runs:
     def create_grid(self):
         self.grid = np.load(os.path.join(self.runs_path, "grid.npy"))
 
+    def get_index(self, indices):
+        param_shape = self.grid.shape[1:]
+        for run, idx in zip(self.runs, np.ndindex(param_shape)):
+            print(idx)
+
     def get_param(self, run_idx):
         if run_idx < 0 or run_idx >= self.num_runs:
             raise IndexError("Run index out of range")
@@ -257,7 +262,7 @@ class Run:
         overview = np.loadtxt(os.path.join(self.path, "sim.ovr"), skiprows=1, usecols=(1))
         overview = np.atleast_1d(overview)
         return overview
-        
+
     def load_zones(self):
         # radius, depth (center of zone), dr
         zones = np.loadtxt(os.path.join(self.path, "sim.zones"), skiprows=1, usecols=(1, 2, 3))
@@ -267,7 +272,6 @@ class Run:
         zones[:, 1] = np.cumsum(zones[:, 2])  # better definition of depth
         return zones.T
 
-
     def temperature_profile(self):
         temp = self.load_temperature()
         R, depth, dr = self.load_zones()
@@ -275,7 +279,8 @@ class Run:
         Rmax = R[0] + depth
 
         if temp.shape[0] != Rmin.shape[0]:
-            raise ValueError(f"mismatch in number of zones: temperature has {temp.shape[0]} but zones has {Rmin.shape[0]}")
+            raise ValueError(
+                f"mismatch in number of zones: temperature has {temp.shape[0]} but zones has {Rmin.shape[0]}")
 
         n = Rmin.shape[0]
         R = np.zeros(2 * n)

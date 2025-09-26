@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.widgets import Slider
-from cloudy_manager.constants import meV
+from .constants import meV
 import numpy as np
 
 
@@ -178,9 +178,6 @@ def plot_with_rad(fig, stab1, stab2, bins, params, xquant, idy1=0, idy2=0, **kwa
 
         i += 1
 
-    def get_bin_index(bin_key):
-        return int(bin_key[3:])
-
     # possible values for each bin
     bin_vals = [np.asarray(params[k]) for k in bin_keys]
 
@@ -275,6 +272,17 @@ def plot_with_rad(fig, stab1, stab2, bins, params, xquant, idy1=0, idy2=0, **kwa
             new_slicer = make_slicer()
             new_y1 = np.asarray(y1[new_slicer])
             new_y2 = np.asarray(y2[new_slicer])
+
+            # slicer is a mix of slices and ints; flatten it
+            idx = tuple(
+                range(y1.shape[i]) if isinstance(s, slice) else [s]
+                for i, s in enumerate(new_slicer)
+            )
+            # here you only want the unique point (no slices) -> select first element
+            int_idx = tuple(i[0] for i in idx)
+            print(np.ravel_multi_index(int_idx, y1.shape))
+
+
         except Exception as e:
             print("update_main_plots: failed to index y with slicer:", e)
             return
