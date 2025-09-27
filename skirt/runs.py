@@ -1,5 +1,7 @@
 import os
+import re
 import numpy as np
+from astropy.io import fits
 from ..cloudy.constants import meV
 
 
@@ -9,7 +11,6 @@ class Runs:
         self.runs_path = os.path.join(self.cwd, "ski")
         if not os.path.isdir(self.runs_path):
             raise FileNotFoundError(f"ski directory not found: {self.runs_path}")
-        self.runs = []
 
     def discover(self):
         names = [d for d in os.listdir(self.runs_path) if os.path.isdir(
@@ -63,25 +64,28 @@ class Run:
     def load_mix(self, **kwargs):
         return self.load_dat("mix.txt", **kwargs)
 
-    # wav (m), tot, tra (W/m2/m)
+    # wav (m), tot, tra, dir (W/m2/m)
     def load_sed(self, **kwargs):
-        sed = self.load_dat("out/sim_sed_sed.dat", usecols=(0, 1, 2), **kwargs)
+        sed = self.load_dat("out/sim_sed_sed.dat", usecols=(0, 1, 2, 3), **kwargs)
         sed[:, 0] = meV / sed[:, 0] * 1e-3  # eV
-        sed[:, 1:] /= sed[:, 0][:, None] # lam F_lam -> F_lam (W/m2/m)
+        sed[:, 1:] /= sed[:, 0][:, None]  # lam F_lam -> F_lam (W/m2/m)
         return sed
 
+    def load_depth(self):
+        # Load data
+        with fits.open(os.path.join(self.out, "sim_opac_tau.fits")) as hdul:
+            cube = np.array(hdul[0].data)  # shape (nx, ny, nw)
+            wl = np.array(hdul[1].data['GRID_POINTS'])
+            unit = hdul[1].columns['GRID_POINTS'].unit
+
+        if unit == 'keV':
+            wl = meV / wl * 1e-3
+        elif unit == 'micron':
+            wl *= 1-6
+        return wl, cube[:, 0, 0]  # at pixel (0, 0)
+
     def temperature_profile(self):
-        temp = self.load_temperature(usecols=(1))
-        mix = self.load_mix(usecols=(0, 3, 6, 7))
-        xmin, xmax, hden, Z = np.atleast_2d(mix).T
+        temp = self.load_temperature().T
+        temp[0] *= 3.086e+18  # pc -> cm
 
-        num_cells = len(xmin)
-
-        T = np.zeros(2 * num_cells)
-        R = np.zeros(2 * num_cells)
-        for i in range(num_cells):
-            T[2*i] = temp[i]
-            T[2*i + 1] = temp[i]
-            R[2*i] = xmin[i]
-            R[2*i + 1] = xmax[i]
-        return R, T
+        return temp[0], temp[1]

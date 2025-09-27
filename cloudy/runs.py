@@ -195,7 +195,18 @@ class Run:
 
     def load_opac(self, idx):
         abs = np.loadtxt(os.path.join(self.path, "sim.opac"), usecols=2)
-        return abs[idx] * 1e4  # 1/cm -> 1/m
+        return abs[idx] * 1e2  # 1/cm -> 1/m
+    
+    def load_depth(self):
+        dep = np.loadtxt(os.path.join(self.path, "sim.depth"), usecols=(0, 1, 2, 3))
+        E, tot, abs, sca = dep.T
+        idx = np.where((E >= nonZeroRange[0]) & (E <= nonZeroRange[1]))[0]
+        E = E[idx]
+        tot = tot[idx]
+        abs = abs[idx]
+        sca = sca[idx]
+        m = meV / E
+        return m, tot, abs, sca
 
     def load_emis_wav(self):
         E = np.loadtxt(os.path.join(self.path, "sim.con"), usecols=(0))
