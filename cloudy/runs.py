@@ -236,13 +236,12 @@ class Runs:
             mesh = np.concatenate(([0], depth))
             mesh /= depth[-1]
 
-            E, J_lambda, _, _ = calc_sed(self.bins, param)
+            E, J_lambda, _, J = calc_sed(self.bins, param)
 
             temp = template
 
             # luminosity
-            F = sum(param[f'bin{b}'] for b in range(self.bins.num_bins))
-            lum = F * 4 * np.pi * (param['rad'] * 1e-2)**2
+            lum = J * cts * (param['rad'] * 1e-2)**2
             temp = temp.replace("{lum}", f"{lum} W")
 
             # radii

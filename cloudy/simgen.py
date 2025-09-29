@@ -14,15 +14,14 @@ def calc_sed(bins, param):
 
     # leftmost edge
     E = [edges[0]]
-    J_lambda = [param['bin0'] / widths[0]]
-    J = param['bin0']
+    J_lambda = [param['bin0']]
+    J = param['bin0'] * widths[0]
 
     # inner edges
     for i in range(1, num_bins):
         E += [edges[i] * 1.001, edges[i] * 0.999]
-        J_flat = param[f'bin{i}'] / widths[i]  # flat W/m2/m
-        J_lambda += [J_lambda[-1], J_flat]
-        J += param[f'bin{i}']
+        J_lambda += [J_lambda[-1], param[f'bin{i}']]
+        J += param[f'bin{i}'] * widths[i]
 
     # rightmost edge
     E += [edges[-1]]
@@ -35,7 +34,7 @@ def calc_sed(bins, param):
     # convert to cloudy units
     m = meV / E
     J_nu = J_lambda / cts * m**2 / 3e8
-    J = 4 * np.pi * J / cts
+    J *= 4 * np.pi / cts
 
     return E, J_lambda, J_nu, J
 
@@ -85,7 +84,7 @@ def make_sim_dirs(bins, params, path=os.getcwd()):
         J = make_SED(sed_dir, bins, combo_dict)
 
         # write sim.in
-        temp = template # reset template
+        temp = template  # reset template
         for k, v in combo_dict.items():
             temp = temp.replace(f"{{{k}}}", str(v))
         temp = temp.replace("{ins}", str(J))
@@ -93,7 +92,7 @@ def make_sim_dirs(bins, params, path=os.getcwd()):
             f.write(temp)
 
     # save grid.npy
-    shape = tuple(len(v) for v in vals) + (len(keys),) # (len(keys), len(vals[0]), len(vals[1]), ...)
+    shape = tuple(len(v) for v in vals) + (len(keys),)  # (len(keys), len(vals[0]), len(vals[1]), ...)
     grid = np.array(combos, dtype=float).reshape(shape)
     grid = np.moveaxis(grid, -1, 0)  # Move len(keys) to the first axis
     np.save(os.path.join(run_path, "grid.npy"), grid)
@@ -103,7 +102,7 @@ def make_sim_dirs(bins, params, path=os.getcwd()):
         "params": params,
         "num_runs": num_runs,
         "bins": {
-            "edges": bins.edges,  # eV
+            "edges": list(bins.edges),  # eV
             "widths": bins.widths,  # meter
             "num_bins": bins.num_bins
         }
