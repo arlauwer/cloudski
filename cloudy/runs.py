@@ -4,13 +4,14 @@ import json
 import numpy as np
 from .constants import *
 from .bins import *
+from .simgen import calc_sed
 from pts.storedtable import writeStoredTable
 
 
 class Runs:
     def __init__(self, path=os.getcwd()):
         self.cwd = path
-        self.runs_path = os.path.join(self.cwd, "runs")
+        self.runs_path = os.path.join(self.cwd, "cloudy")
         self.params_path = os.path.join(self.runs_path, "params.json")
 
         self.load_params()
@@ -32,8 +33,7 @@ class Runs:
 
     def get_index(self, indices):
         param_shape = self.grid.shape[1:]
-        for run, idx in zip(self.runs, np.ndindex(param_shape)):
-            print(idx)
+        return np.ravel_multi_index(indices, param_shape)
 
     def get_param(self, run_idx):
         if run_idx < 0 or run_idx >= self.num_runs:
@@ -153,6 +153,70 @@ class Runs:
                 [cont[..., 0], cont[..., 1], cont[..., 2], cont[..., 3]]
             )
 
+    def export_skirt(self, outdir="ski"):
+        with open("template/sphe.ski") as f:
+            template = f.read()
+
+        for r, run in enumerate(self.runs):
+            param = self.get_param(r)
+
+            R, depth, dr = run.load_zones()
+            num_zones = len(R)
+            leftR = R[0] + depth - dr
+            rightR = R[0] + depth
+
+            # mesh: normalize cumulative depths
+            mesh = np.concatenate(([0], depth))
+            mesh /= depth[-1]
+
+            E, J_lambda, _, _ = calc_sed(self.bins, param)
+
+            temp = template
+
+            # luminosity
+            F = sum(param[f'bin{b}'] for b in range(self.bins.num_bins))
+            lum = F * 4 * np.pi * (param['rad'] * 1e-2)**2
+            temp = temp.replace("{lum}", f"{lum} W")
+
+            # radii
+            temp = temp.replace("{minR}", f"{np.min(leftR)} cm")
+            temp = temp.replace("{maxR}", f"{np.max(rightR)} cm")
+
+            ski_path = os.path.join(outdir, run.name)
+            os.makedirs(os.path.join(ski_path, "out"), exist_ok=True)
+
+            # sim.ski
+            with open(os.path.join(ski_path, "sim.ski"), "w") as f:
+                f.write(temp)
+
+            # sed.txt
+            with open(os.path.join(ski_path, "sed.txt"), "w") as f:
+                f.write("# Column 1: wavelength (eV)\n")
+                f.write("# Column 2: specific luminosity (W/m)\n")
+                for e, j in zip(E, J_lambda):
+                    f.write(f"{e} {j}\n")
+
+            # write mix.txt
+            with open(os.path.join(ski_path, "mix.txt"), "w") as f:
+                f.write("# Column 1: rmin (cm)\n")
+                f.write("# Column 2: thetamin (deg)\n")
+                f.write("# Column 3: phimin (deg)\n")
+                f.write("# Column 4: rmax (cm)\n")
+                f.write("# Column 5: thetamax (deg)\n")
+                f.write("# Column 6: phimax (deg)\n")
+                f.write("# Column 7: number density (1/cm3)\n")
+                f.write("# Column 8: metallicity (1)\n")
+                for i in range(num_zones):
+                    hden = param['hden']
+                    Z = param['Z']
+                    f.write(f"{leftR[i]} {0} {0} {rightR[i]} {0} {0} {hden} {Z}\n")
+
+            # write mesh.txt
+            with open(os.path.join(ski_path, "mesh.txt"), "w") as f:
+                for m in mesh:
+                    f.write(f"{m}\n")
+
+
 #################### RUN ####################
 
 
@@ -196,7 +260,7 @@ class Run:
     def load_opac(self, idx):
         abs = np.loadtxt(os.path.join(self.path, "sim.opac"), usecols=2)
         return abs[idx] * 1e2  # 1/cm -> 1/m
-    
+
     def load_depth(self):
         dep = np.loadtxt(os.path.join(self.path, "sim.depth"), usecols=(0, 1, 2, 3))
         E, tot, abs, sca = dep.T
