@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# defaults
+MAX_JOBS=32
+CLOUDY_BIN="cloudy"
+FORCE=false
+RUNS_DIR="cloudy"
+
+# parse options
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -f|--force) FORCE=true; shift ;;
+    -j|--jobs) MAX_JOBS="$2"; shift 2 ;;
+    -c|--cloudy-bin) CLOUDY_BIN="$2"; shift 2 ;;
+    -d|--runs-dir) RUNS_DIR="$2"; shift 2 ;;
+    -h|--help)
+      echo "Usage: $0 [options] [runs_dir]"
+      echo "Options:"
+      echo "  -f, --force         Re-run even if sim.out exists"
+      echo "  -j, --jobs N        Maximum concurrent jobs (default: $MAX_JOBS)"
+      echo "  -c, --cloudy-bin    Path to cloudy executable (default: $CLOUDY_BIN)"
+      echo "  -d, --runs-dir      Directory containing simulation folders (default: $RUNS_DIR)"
+      exit 0
+      ;;
+    --) shift; break ;; # end of options
+    -*) echo "Unknown option: $1"; exit 1 ;;
+    *)  # positional argument
+        RUNS_DIR="$1"; shift ;;
+  esac
+done
+
+
+# ensure runs dir exists
+cd "$RUNS_DIR" || { echo "Directory $RUNS_DIR not found"; exit 1; }
+
+run_sim() {
+  local dir="$1"
+  cd "$dir" || return
+  echo "Starting $dir"
+  "$CLOUDY_BIN" < sim.in > sim.out
+  echo "Finished $dir"
+}
+
+jobcount=0
+for dir in */; do
+  if [ -f "$dir/sim.out" ] && [ "$FORCE" = false ]; then
+    echo "Skipping $dir (already run)"
+    continue
+  fi
+
+  run_sim "$dir" &
+  ((jobcount++))
+
+  if (( jobcount >= MAX_JOBS )); then
+    wait -n
+    ((jobcount--))
+  fi
+done
+
+wait
+echo "All simulations complete."

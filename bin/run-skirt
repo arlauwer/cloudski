@@ -1,0 +1,70 @@
+#!/bin/bash
+
+# defaults
+PROCS=1
+THREADS=24
+SKIRT_BIN="skirt"
+FORCE=false
+RUNS_DIR="ski"
+
+# parse options
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -f|--force) FORCE=true; shift ;;
+    -s|--skirt-bin) SKIRT_BIN="$2"; shift 2 ;;
+    -d|--runs-dir) RUNS_DIR="$2"; shift 2 ;;
+    -p|--parallel)
+      if [[ "$2" =~ ^([0-9]+)x([0-9]+)$ ]]; then
+        PROCS="${BASH_REMATCH[1]}"
+        THREADS="${BASH_REMATCH[2]}"
+      else
+        echo "Error: --parallel expects format MxN (e.g. 16x2)"
+        exit 1
+      fi
+      shift 2
+      ;;
+    -h|--help)
+      echo "Usage: $0 [options] [runs_dir]"
+      echo "Options:"
+      echo "  -f, --force         Re-run even if sim.out exists"
+      echo "  -s, --skirt-bin     Path to skirt executable (default: $SKIRT_BIN)"
+      echo "  -d, --runs-dir      Directory with run subfolders (default: $RUNS_DIR)"
+      echo "  -p, --parallel MxN  Run M processes with N threads each (default: 1x24)"
+      exit 0
+      ;;
+    --) shift; break ;; # end of options
+    -*) echo "Unknown option: $1"; exit 1 ;;
+    *)  RUNS_DIR="$1"; shift ;;
+  esac
+done
+
+# ensure runs dir exists
+cd "$RUNS_DIR" || { echo "Directory $RUNS_DIR not found"; exit 1; }
+
+run_sim() {
+  local dir="$1"
+  cd "$dir" || return
+  echo "Starting $dir with $THREADS threads"
+  "$SKIRT_BIN" sim.ski -o out/ -t "$THREADS"
+  echo "Finished $dir"
+}
+
+jobcount=0
+for dir in */; do
+  if [ -f "$dir/out/sim_log.txt" ] && [ "$FORCE" = false ]; then
+    echo "Skipping $dir (already run)"
+    continue
+  fi
+
+  run_sim "$dir" &
+  ((jobcount++))
+
+  if (( jobcount >= PROCS )); then
+    wait -n
+    ((jobcount--))
+  fi
+done
+
+wait
+echo "All simulations complete."
+

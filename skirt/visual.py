@@ -65,30 +65,15 @@ def compare_cloudy_skirt(cloudy, skirt, run_indices=None, colors=None):
     plt.show()
 
 
-def plot_with_rad(fig, cloudy, skirt, bins, params, xquant, idy1=0, idy2=0, **kwargs):
-    # --- prepare data and axes ---
-    # yquant1 = stab1['quantityNames'][idy1]
-    # yquant2 = stab2['quantityNames'][idy2]
-    # x1 = stab1[xquant].value
-    # x2 = stab2[xquant].value
-    # y1 = stab1[yquant1].value
-    # y2 = stab2[yquant2].value
-    # min_y1 = np.nanmin(y1[y1 > 0])
-    # max_y1 = np.nanmax(y1[y1 > 0])
-    # min_y2 = np.nanmin(y2[y2 > 0])
-    # max_y2 = np.nanmax(y2[y2 > 0])
-    # axis_names = list(stab1['axisNames'])
-    # if axis_names != list(stab2['axisNames']):
-    #     raise ValueError("stab1 and stab2 must have the same axisNames")
-
+def plot_with_rad(fig, cloudy, skirt, slider_names=['hden']):
     # create axes (kept positions from your original layout)
     ax1 = fig.add_axes([0.10, 0.10, 0.35, 0.60])
     ax2 = fig.add_axes([0.55, 0.10, 0.35, 0.60])
     ax3 = fig.add_axes([0.10, 0.77, 0.60, 0.18])
 
     # --- bins handling ---
-    edges = np.asarray(bins.edges)
-    num_bins = bins.num_bins
+    edges = np.asarray(cloudy.bins.edges)
+    params = cloudy.params
 
     keys = list(params.keys())
     bin_keys = []
@@ -119,6 +104,8 @@ def plot_with_rad(fig, cloudy, skirt, bins, params, xquant, idy1=0, idy2=0, **kw
 
     i = 0
     for key, val in zip(other_keys, other_vals):
+        if not key in slider_names:
+            continue
         # separate axis for ticks, placed slightly below
         nvals = len(val)
         ticks = [f"{v:.1e}" for v in val]
@@ -153,13 +140,15 @@ def plot_with_rad(fig, cloudy, skirt, bins, params, xquant, idy1=0, idy2=0, **kw
     def make_indices():
         indices = []
 
-        for key in bin_keys:
-            idx = find_value_index(params[key], current_vals[bin_keys.index(key)])
-            indices.append(idx)
-
-        for key in other_keys:
-            s = int(sliders[key].val)
-            indices.append(s)
+        for key in keys:
+            if key in bin_keys:
+                idx = find_value_index(params[key], current_vals[bin_keys.index(key)])
+                indices.append(idx)
+            elif key in slider_names:
+                s = int(sliders[key].val)
+                indices.append(s)
+            else:
+                indices.append(0)
 
         return tuple(indices)
 
@@ -169,33 +158,51 @@ def plot_with_rad(fig, cloudy, skirt, bins, params, xquant, idy1=0, idy2=0, **kw
     srun = skirt.runs[idx]
 
     # left plot
-    c_R, c_T = crun.temperature_profile()
-    s_R, s_T = srun.temperature_profile()
-    s_R += 1e15  # add start point
-    ax1_skirt, = ax1.plot(s_R, s_T, label=f"skirt", color='blue')
-    ax1_cloudy, = ax1.plot(c_R, c_T, label=f"cloudy", linestyle='--', color='red')
-    ax1.set_xscale('log')
-    ax1.set_yscale('log')
-    ax1.set_xlabel("Radius (cm)")
-    ax1.set_ylabel("Temperature (K)")
-    ax1.legend()
+    def plot_temp(ax, crun, srun):
+        ax.cla()
+        converged = srun.converged()
+        c_R, c_T = crun.temperature_profile()
+        s_R, s_T = srun.temperature_profile()
+        s_R += 1e15  # add start point
+        ax.plot(s_R, s_T, label=f"skirt", color='blue')
+        ax.plot(c_R, c_T, label=f"cloudy", linestyle='--', color='red')
+        if not converged:
+            ax.text(0.5, 0.95, f"Not Converged", transform=ax.transAxes,
+                    ha='center', va='top', color='red', fontsize=12)
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.set_xlabel("Radius (cm)")
+        ax.set_ylabel("Temperature (K)")
+        ax.legend()
 
-    # ax1_line, = ax1.plot(x1, yline1, **kwargs)
-    ax1.set_xscale('log')
-    ax1.set_yscale('log')
-    # ax1.set_title(f"{yquant1}")
-    # ax1.set_xlabel(f"{xquant} [{stab1['axisUnits'][stab1['axisNames'].index(xquant)]}]")
-    # ax1.set_ylabel(f"{yquant1} [{stab1['quantityUnits'][stab1['quantityNames'].index(yquant1)]}]")
-    # ax1.set_ylim(min_y1*0.8, max_y1*1.2)
+    def plot_sed(ax, crun, srun):
+        ax.cla()
+        converged = srun.converged()
+        c_wav, c_idx = crun.load_cont_wav()
+        c_inc, c_tra, c_emi, c_tot = crun.load_cont(c_idx).T
+        s_wav, s_tot, s_tra, s_dir = srun.load_sed().T
+        ax.plot(s_wav, s_tra, label=f"ski (tra)", color='blue')
+        ax.plot(s_wav, s_dir, label=f"ski (dir)", color='blue')
+        ax.plot(c_wav, c_inc, label=f"cloudy (tra)", linestyle='--', color='red')
+        ax.plot(c_wav, c_tra, label=f"cloudy (dir)", linestyle='--', color='red')
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.set_xlabel("Wavelength (m)")
+        ax.set_ylabel("Flux (W/m2/m)")
+        ax.legend()
 
-    # right plot
-    # ax2_line, = ax2.plot(x2, yline2, **kwargs)
-    # ax2.set_xscale('log')
-    # ax2.set_yscale('log')
-    # ax2.set_title(f"{yquant2}")
-    # ax2.set_xlabel(f"{xquant} [{stab2['axisUnits'][stab2['axisNames'].index(xquant)]}]")
-    # ax2.set_ylabel(f"{yquant2} [{stab2['quantityUnits'][stab2['quantityNames'].index(yquant2)]}]")
-    # ax2.set_ylim(min_y2*0.8, max_y2*1.2)
+    def plot_opac(ax, crun, srun):
+        ax.cla()
+        converged = srun.converged()
+        c_wl, _, c_dep, _ = crun.load_depth()
+        s_wl, s_dep = srun.load_depth()
+        ax.plot(s_wl, s_dep, label=f"skirt", color='red')
+        ax.plot(c_wl, c_dep, label=f"cloudy", linestyle='--', color='blue')
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.set_xlabel("Wavelength (m)")
+        ax.set_ylabel("Optical depth (1)")
+        ax.legend()
 
     for e in edges:
         # ax1.axvline(meV/e, color='gray', ls='--', lw=1)
@@ -238,17 +245,23 @@ def plot_with_rad(fig, cloudy, skirt, bins, params, xquant, idy1=0, idy2=0, **kw
         fig.canvas.draw_idle()
 
     def update_main_plots():
-
         indices = make_indices()
         idx = cloudy.get_index(indices)
         crun = cloudy.runs[idx]
         srun = skirt.runs[idx]
 
-        c_R, c_T = crun.temperature_profile()
-        s_R, s_T = srun.temperature_profile()
+        print(idx)
 
-        ax1_skirt.set_ydata(s_T)
-        ax1_cloudy.set_ydata(c_T)
+        if srun.crashed():
+            ax1.cla()
+            ax2.cla()
+            ax1.text(0.5, 0.5, f"Crashed", transform=ax1.transAxes, ha='center', va='top', color='red', fontsize=17)
+            ax2.text(0.5, 0.5, f"Crashed", transform=ax2.transAxes, ha='center', va='top', color='red', fontsize=17)
+            return
+
+        plot_temp(ax1, crun, srun)
+        # plot_sed(ax2, crun, srun)
+        plot_opac(ax2, crun, srun)
 
         fig.canvas.draw_idle()
 

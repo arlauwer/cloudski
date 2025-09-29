@@ -84,6 +84,11 @@ class Run:
             wl *= 1-6
         return wl, cube[:, 0, 0]  # at pixel (0, 0)
 
+    def converged(self):
+        with open(os.path.join(self.out, "sim_log.txt")) as f:
+            lines = f.readlines()
+        return "Convergence not yet reached" in lines[-3]
+
     def temperature_profile(self):
         temp = self.load_temperature().T
         temp[0] *= 3.086e+18  # pc -> cm

@@ -153,7 +153,7 @@ class Runs:
                 [cont[..., 0], cont[..., 1], cont[..., 2], cont[..., 3]]
             )
 
-    def export_skirt(self, outdir="ski"):
+    def export_skirt_sphe(self, outdir="ski"):
         with open("template/sphe.ski") as f:
             template = f.read()
 
@@ -210,6 +210,77 @@ class Runs:
                     hden = param['hden']
                     Z = param['Z']
                     f.write(f"{leftR[i]} {0} {0} {rightR[i]} {0} {0} {hden} {Z}\n")
+
+            # write mesh.txt
+            with open(os.path.join(ski_path, "mesh.txt"), "w") as f:
+                for m in mesh:
+                    f.write(f"{m}\n")
+
+    def export_skirt_cart(self, outdir="ski", D=1e14):
+        with open("template/cart.ski") as f:
+            template = f.read()
+
+        for r, run in enumerate(self.runs):
+            param = self.get_param(r)
+
+            R, depth, dr = run.load_zones()
+            num_zones = len(R)
+            minX = R[0] + depth - dr
+            maxX = R[0] + depth
+            minY = np.ones(num_zones) * -D
+            maxY = np.ones(num_zones) * D
+            minZ = np.ones(num_zones) * -D
+            maxZ = np.ones(num_zones) * D
+
+            # mesh: normalize cumulative depths
+            mesh = np.concatenate(([0], depth))
+            mesh /= depth[-1]
+
+            E, J_lambda, _, _ = calc_sed(self.bins, param)
+
+            temp = template
+
+            # luminosity
+            F = sum(param[f'bin{b}'] for b in range(self.bins.num_bins))
+            lum = F * 4 * np.pi * (param['rad'] * 1e-2)**2
+            temp = temp.replace("{lum}", f"{lum} W")
+
+            # radii
+            temp = temp.replace("{minX}", f"{np.min(minX)} cm")
+            temp = temp.replace("{minY}", f"{np.max(minY)} cm")
+            temp = temp.replace("{minZ}", f"{np.max(minZ)} cm")
+            temp = temp.replace("{maxX}", f"{np.min(maxX)} cm")
+            temp = temp.replace("{maxY}", f"{np.min(maxY)} cm")
+            temp = temp.replace("{maxZ}", f"{np.min(maxZ)} cm")
+
+            ski_path = os.path.join(outdir, run.name)
+            os.makedirs(os.path.join(ski_path, "out"), exist_ok=True)
+
+            # sim.ski
+            with open(os.path.join(ski_path, "sim.ski"), "w") as f:
+                f.write(temp)
+
+            # sed.txt
+            with open(os.path.join(ski_path, "sed.txt"), "w") as f:
+                f.write("# Column 1: wavelength (eV)\n")
+                f.write("# Column 2: specific luminosity (W/m)\n")
+                for e, j in zip(E, J_lambda):
+                    f.write(f"{e} {j}\n")
+
+            # write mix.txt
+            with open(os.path.join(ski_path, "mix.txt"), "w") as f:
+                f.write("# Column 1: xmin (cm)\n")
+                f.write("# Column 2: ymin (cm)\n")
+                f.write("# Column 3: zmin (cm)\n")
+                f.write("# Column 4: xmax (cm)\n")
+                f.write("# Column 5: ymax (cm)\n")
+                f.write("# Column 6: zmax (cm)\n")
+                f.write("# Column 7: number density (1/cm3)\n")
+                f.write("# Column 8: metallicity (1)\n")
+                for i in range(num_zones):
+                    hden = param['hden']
+                    Z = param['Z']
+                    f.write(f"{minX[i]} {minY[i]} {minZ[i]} {maxX[i]} {maxY[i]} {maxZ[i]} {hden} {Z}\n")
 
             # write mesh.txt
             with open(os.path.join(ski_path, "mesh.txt"), "w") as f:

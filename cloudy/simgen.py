@@ -58,7 +58,7 @@ def make_SED(path, bins, params):
 def make_sim_dirs(bins, params, path=os.getcwd()):
 
     # create runs directory
-    run_path = os.path.join(path, "runs")
+    run_path = os.path.join(path, "cloudy")
     os.makedirs(run_path, exist_ok=True)
 
     # list all parameter combinations
