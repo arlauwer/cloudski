@@ -4,7 +4,7 @@ import json
 import numpy as np
 from .constants import *
 from .bins import *
-from .simgen import calc_sed
+from .simgen import calc_sed_bins
 from pts.storedtable import writeStoredTable
 
 
@@ -169,14 +169,19 @@ class Runs:
             mesh = np.concatenate(([0], depth))
             mesh /= depth[-1]
 
-            E, J_lambda, _, _ = calc_sed(self.bins, param)
-
+            # AGN instead of bins
+            E, idx = run.load_cont_wav()
+            J_lambda = run.load_cont(idx).T
+            J_lambda = J_lambda[0]
             temp = template
-
-            # luminosity
-            F = sum(param[f'bin{b}'] for b in range(self.bins.num_bins))
-            lum = F * 4 * np.pi * (param['rad'] * 1e-2)**2
+            lum = param['ins'] * 1e-7 * 4*np.pi * (param['rad'])**2
             temp = temp.replace("{lum}", f"{lum} W")
+
+            # E, J_lambda, _, _ = calc_sed_bins(self.bins, param)
+            # temp = template
+            # F = sum(param[f'bin{b}'] for b in range(self.bins.num_bins))
+            # lum = F * 4 * np.pi * (param['rad'] * 1e-2)**2
+            # temp = temp.replace("{lum}", f"{lum} W")
 
             # radii
             temp = temp.replace("{minR}", f"{np.min(leftR)} cm")
@@ -191,8 +196,8 @@ class Runs:
 
             # sed.txt
             with open(os.path.join(ski_path, "sed.txt"), "w") as f:
-                f.write("# Column 1: wavelength (eV)\n")
-                f.write("# Column 2: specific luminosity (W/m)\n")
+                f.write("# Column 1: wavelength (m)\n")
+                f.write("# Column 2: specific luminosity (W/m)\n")  # actually W/m2/m but is renormalized anyway
                 for e, j in zip(E, J_lambda):
                     f.write(f"{e} {j}\n")
 
@@ -236,12 +241,18 @@ class Runs:
             mesh = np.concatenate(([0], depth))
             mesh /= depth[-1]
 
-            E, J_lambda, _, J = calc_sed(self.bins, param)
+            # AGN instead of bins
+            # E, idx = run.load_cont_wav()
+            # J_lambda = run.load_cont(idx).T
+            # J_lambda = J_lambda[0]
+            # temp = template
+            # lum = param['ins'] * 1e-7 * (param['rad'])**2
+            # temp = temp.replace("{lum}", f"{lum} W")
 
+            E, J_lambda, _, _ = calc_sed_bins(self.bins, param)
             temp = template
-
-            # luminosity
-            lum = J * cts * (param['rad'] * 1e-2)**2
+            F = sum(param[f'bin{b}'] for b in range(self.bins.num_bins))
+            lum = F * 4 * np.pi * (param['rad'] * 1e-2)**2
             temp = temp.replace("{lum}", f"{lum} W")
 
             # radii

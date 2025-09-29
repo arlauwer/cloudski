@@ -6,7 +6,7 @@ from .constants import *
 from .bins import Bins
 
 
-def calc_sed(bins, param):
+def calc_sed_bins(bins, param):
     # bin edges and widths
     edges = bins.edges
     num_bins = bins.num_bins
@@ -14,14 +14,15 @@ def calc_sed(bins, param):
 
     # leftmost edge
     E = [edges[0]]
-    J_lambda = [param['bin0']]
-    J = param['bin0'] * widths[0]
+    J_lambda = [param['bin0'] / widths[0]]
+    J = param['bin0']
 
     # inner edges
     for i in range(1, num_bins):
         E += [edges[i] * 1.001, edges[i] * 0.999]
-        J_lambda += [J_lambda[-1], param[f'bin{i}']]
-        J += param[f'bin{i}'] * widths[i]
+        J_flat = param[f'bin{i}'] / widths[i]
+        J_lambda += [J_lambda[-1], J_flat]
+        J += param[f'bin{i}']
 
     # rightmost edge
     E += [edges[-1]]
@@ -40,8 +41,7 @@ def calc_sed(bins, param):
 
 
 def make_SED(path, bins, params):
-    E, J_lambda, J_nu, J = calc_sed(bins, params)
-
+    E, J_lambda, J_nu, J = calc_sed_bins(bins, params)
     # write to file
     os.makedirs(path, exist_ok=True)
     with open(os.path.join(path, "cf.sed"), "w") as f:
@@ -54,7 +54,7 @@ def make_SED(path, bins, params):
     return J
 
 
-def make_sim_dirs(bins, params, path=os.getcwd()):
+def make_sim_dirs(bins, params, path=os.getcwd(), J=None):
 
     # create runs directory
     run_path = os.path.join(path, "cloudy")
@@ -81,7 +81,8 @@ def make_sim_dirs(bins, params, path=os.getcwd()):
 
         # generate SED
         combo_dict = dict(zip(keys, combo))
-        J = make_SED(sed_dir, bins, combo_dict)
+        if J is None:
+            J = make_SED(sed_dir, bins, combo_dict)
 
         # write sim.in
         temp = template  # reset template

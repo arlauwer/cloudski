@@ -196,8 +196,8 @@ def plot_with_rad(fig, cloudy, skirt, slider_names=['hden']):
         converged = srun.converged()
         c_wl, _, c_dep, _ = crun.load_depth()
         s_wl, s_dep = srun.load_depth()
-        ax.plot(s_wl, s_dep, label=f"skirt", color='red')
-        ax.plot(c_wl, c_dep, label=f"cloudy", linestyle='--', color='blue')
+        ax.plot(s_wl, s_dep, label=f"skirt", color='blue')
+        ax.plot(c_wl, c_dep, label=f"cloudy", linestyle='--', color='red')
         ax.set_xscale('log')
         ax.set_yscale('log')
         ax.set_xlabel("Wavelength (m)")
@@ -260,8 +260,8 @@ def plot_with_rad(fig, cloudy, skirt, slider_names=['hden']):
             return
 
         plot_temp(ax1, crun, srun)
-        # plot_sed(ax2, crun, srun)
-        plot_opac(ax2, crun, srun)
+        plot_sed(ax1, crun, srun)
+        # plot_opac(ax2, crun, srun)
 
         fig.canvas.draw_idle()
 
