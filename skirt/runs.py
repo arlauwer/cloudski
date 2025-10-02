@@ -59,7 +59,8 @@ class Run:
         return np.atleast_1d(data)
 
     def load_temperature(self, **kwargs):
-        return self.load_dat("out/sim_temp_gas_T.dat", **kwargs)
+        temp = self.load_dat("out/sim_temp2_gas_T.dat", **kwargs)
+        return temp[:, 1]
 
     def load_mix(self, **kwargs):
         return self.load_dat("mix.txt", **kwargs)
@@ -87,10 +88,31 @@ class Run:
     def converged(self):
         with open(os.path.join(self.out, "sim_log.txt")) as f:
             lines = f.readlines()
-        return "Convergence not yet reached" in lines[-3]
+        return not "Convergence not yet reached" in lines[-3]
+    
+    def radiation_bins(self):
+        rad_dat = self.load_dat("out/sim_rad_J.dat")
+        cell = rad_dat[:, 0]
+        J = rad_dat[:, 1:]
+        
 
-    def temperature_profile(self):
-        temp = self.load_temperature().T
-        temp[0] *= 3.086e+18  # pc -> cm
+    def temperature_profile(self, per_cell=True):
+        if per_cell:
+            temp = self.load_temperature()
+            mix = self.load_mix()
 
-        return temp[0], temp[1]
+            x = mix[:, [0, 3]]
+            num_cells = x.shape[0]
+
+            X = np.zeros(2*num_cells)
+            X[0::2] = x[:, 0]
+            X[1::2] = x[:, 1]
+
+            T = np.zeros(2*num_cells)
+            T[0::2] = temp
+            T[1::2] = temp
+            return X, T
+        else:
+            temp = self.load_dat("out/sim_temp_gas_T.dat").T
+            temp[0] *= 3.086e+18  # pc -> cm
+            return temp[0], temp[1]

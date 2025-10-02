@@ -5,6 +5,7 @@ import numpy as np
 from .constants import *
 from .bins import *
 from .simgen import calc_sed_bins
+import h5py
 from pts.storedtable import writeStoredTable
 
 
@@ -153,7 +154,72 @@ class Runs:
                 [cont[..., 0], cont[..., 1], cont[..., 2], cont[..., 3]]
             )
 
-    def export_skirt_sphe(self, outdir="ski"):
+    def convert_to_hdf5(self, save_cont=False):
+        num_bins = self.bins.num_bins
+
+        ions = np.arange(numIons, dtype=int)
+        wo, inRange_o = self.runs[0].load_opac_wav()
+        we, inRange_e = self.runs[0].load_emis_wav()
+        if save_cont:
+            wc, inRange_c = self.runs[0].load_cont_wav()
+
+        keys = list(self.params.keys())
+        other_keys = keys[:-num_bins]
+        bin_keys = keys[-num_bins:]
+
+        vals = [np.array(v) for v in self.params.values()]
+        other_vals = vals[:-num_bins]
+        bin_vals = vals[-num_bins:]
+
+        param_shape = self.grid.shape[1:]
+
+        temperature = np.zeros(param_shape)
+        abundance = np.zeros((numIons, *param_shape))
+        opac = np.zeros((wo.size, *param_shape))
+        emis = np.zeros((we.size, *param_shape))
+        if save_cont:
+            cont = np.zeros((wc.size, *param_shape, 4))  # inc, tra, emi, tot
+
+        for run, idx in zip(self.runs, np.ndindex(param_shape)):
+            temperature[idx] = run.load_temperature()
+            abundance[:, *idx] = run.load_species()
+            opac[:, *idx] = run.load_opac(inRange_o)
+            emis[:, *idx] = run.load_emis(inRange_e)
+            if save_cont:
+                cont[:, *idx] = run.load_cont(inRange_c)
+
+        out_path = os.path.join(self.cwd, "results.h5")
+        with h5py.File(out_path, "w") as f:
+            # store axes
+            f.create_dataset("axes/other_keys", data=np.string_(other_keys))
+            f.create_dataset("axes/bin_keys", data=np.string_(bin_keys))
+            f.create_dataset("axes/other_vals", data=np.stack(other_vals))
+            f.create_dataset("axes/bin_vals", data=np.stack(bin_vals))
+            f.create_dataset("axes/ions", data=ions)
+            f.create_dataset("axes/wo", data=wo)
+            f.create_dataset("axes/we", data=we)
+            if save_cont:
+                f.create_dataset("axes/wc", data=wc)
+
+            # store fields
+            f.create_dataset("fields/temperature", data=temperature)
+            f["fields/temperature"].attrs["unit"] = "K"
+
+            f.create_dataset("fields/abundance", data=abundance)
+            f["fields/abundance"].attrs["unit"] = "1/m3"
+
+            f.create_dataset("fields/opac", data=opac)
+            f["fields/opac"].attrs["unit"] = "1/m"
+
+            f.create_dataset("fields/emis", data=emis)
+            f["fields/emis"].attrs["unit"] = "W/m3"
+
+            if save_cont:
+                f.create_dataset("fields/cont", data=cont)
+                f["fields/cont"].attrs["components"] = ["inc", "tra", "emi", "tot"]
+                f["fields/cont"].attrs["unit"] = "W/m2"
+
+    def export_skirt_sphe(self, outdir="ski", AGN=False):
         with open("template/sphe.ski") as f:
             template = f.read()
 
@@ -162,6 +228,7 @@ class Runs:
 
             R, depth, dr = run.load_zones()
             num_zones = len(R)
+
             leftR = R[0] + depth - dr
             rightR = R[0] + depth
 
@@ -170,18 +237,18 @@ class Runs:
             mesh /= depth[-1]
 
             # AGN instead of bins
-            E, idx = run.load_cont_wav()
-            J_lambda = run.load_cont(idx).T
-            J_lambda = J_lambda[0]
-            temp = template
-            lum = param['ins'] * 1e-7 * 4*np.pi * (param['rad'])**2
+            if AGN:
+                E, idx = run.load_cont_wav()
+                J_lambda = run.load_cont(idx).T
+                J_lambda = J_lambda[0]
+                temp = template
+                lum = param['ins'] * 1e-7 * 4*np.pi * (param['rad'])**2
+            else:
+                E, J_lambda, _, _ = calc_sed_bins(self.bins, param)
+                temp = template
+                F = sum(param[f'bin{b}'] for b in range(self.bins.num_bins))
+                lum = F * 4 * np.pi * (param['rad'] * 1e-2)**2
             temp = temp.replace("{lum}", f"{lum} W")
-
-            # E, J_lambda, _, _ = calc_sed_bins(self.bins, param)
-            # temp = template
-            # F = sum(param[f'bin{b}'] for b in range(self.bins.num_bins))
-            # lum = F * 4 * np.pi * (param['rad'] * 1e-2)**2
-            # temp = temp.replace("{lum}", f"{lum} W")
 
             # radii
             temp = temp.replace("{minR}", f"{np.min(leftR)} cm")
@@ -196,7 +263,10 @@ class Runs:
 
             # sed.txt
             with open(os.path.join(ski_path, "sed.txt"), "w") as f:
-                f.write("# Column 1: wavelength (m)\n")
+                if AGN:
+                    f.write("# Column 1: wavelength (m)\n")
+                else:
+                    f.write("# Column 1: wavelength (eV)\n")
                 f.write("# Column 2: specific luminosity (W/m)\n")  # actually W/m2/m but is renormalized anyway
                 for e, j in zip(E, J_lambda):
                     f.write(f"{e} {j}\n")
@@ -221,7 +291,7 @@ class Runs:
                 for m in mesh:
                     f.write(f"{m}\n")
 
-    def export_skirt_cart(self, outdir="ski", D=1e14):
+    def export_skirt_cart(self, outdir="ski", AGN=False):
         with open("template/cart.ski") as f:
             template = f.read()
 
@@ -232,36 +302,36 @@ class Runs:
             num_zones = len(R)
             minX = R[0] + depth - dr
             maxX = R[0] + depth
-            minY = np.ones(num_zones) * -D
-            maxY = np.ones(num_zones) * D
-            minZ = np.ones(num_zones) * -D
-            maxZ = np.ones(num_zones) * D
+            minY = np.ones(num_zones) * -minX[0] * 1e-2
+            maxY = np.ones(num_zones) * minX[0] * 1e-2
+            minZ = np.ones(num_zones) * -minX[0] * 1e-2
+            maxZ = np.ones(num_zones) * minX[0] * 1e-2
 
             # mesh: normalize cumulative depths
             mesh = np.concatenate(([0], depth))
             mesh /= depth[-1]
 
             # AGN instead of bins
-            # E, idx = run.load_cont_wav()
-            # J_lambda = run.load_cont(idx).T
-            # J_lambda = J_lambda[0]
-            # temp = template
-            # lum = param['ins'] * 1e-7 * (param['rad'])**2
-            # temp = temp.replace("{lum}", f"{lum} W")
-
-            E, J_lambda, _, _ = calc_sed_bins(self.bins, param)
-            temp = template
-            F = sum(param[f'bin{b}'] for b in range(self.bins.num_bins))
-            lum = F * 4 * np.pi * (param['rad'] * 1e-2)**2
+            if AGN:
+                E, idx = run.load_cont_wav()
+                J_lambda = run.load_cont(idx).T
+                J_lambda = J_lambda[0]
+                temp = template
+                lum = param['ins'] * 1e-7 * (param['rad'])**2
+            else:
+                E, J_lambda, _, _ = calc_sed_bins(self.bins, param)
+                temp = template
+                F = sum(param[f'bin{b}'] for b in range(self.bins.num_bins))
+                lum = F * 4 * np.pi * (param['rad'] * 1e-2)**2
             temp = temp.replace("{lum}", f"{lum} W")
 
             # radii
             temp = temp.replace("{minX}", f"{np.min(minX)} cm")
-            temp = temp.replace("{minY}", f"{np.max(minY)} cm")
-            temp = temp.replace("{minZ}", f"{np.max(minZ)} cm")
-            temp = temp.replace("{maxX}", f"{np.min(maxX)} cm")
-            temp = temp.replace("{maxY}", f"{np.min(maxY)} cm")
-            temp = temp.replace("{maxZ}", f"{np.min(maxZ)} cm")
+            temp = temp.replace("{minY}", f"{np.min(minY)} cm")
+            temp = temp.replace("{minZ}", f"{np.min(minZ)} cm")
+            temp = temp.replace("{maxX}", f"{np.max(maxX)} cm")
+            temp = temp.replace("{maxY}", f"{np.max(maxY)} cm")
+            temp = temp.replace("{maxZ}", f"{np.max(maxZ)} cm")
 
             ski_path = os.path.join(outdir, run.name)
             os.makedirs(os.path.join(ski_path, "out"), exist_ok=True)
@@ -272,7 +342,11 @@ class Runs:
 
             # sed.txt
             with open(os.path.join(ski_path, "sed.txt"), "w") as f:
-                f.write("# Column 1: wavelength (eV)\n")
+                if AGN:
+                    f.write("# Column 1: wavelength (m)\n")
+                else:
+                    f.write("# Column 1: wavelength (eV)\n")
+
                 f.write("# Column 2: specific luminosity (W/m)\n")
                 for e, j in zip(E, J_lambda):
                     f.write(f"{e} {j}\n")

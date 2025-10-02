@@ -54,7 +54,7 @@ def make_SED(path, bins, params):
     return J
 
 
-def make_sim_dirs(bins, params, path=os.getcwd(), J=None):
+def make_sim_dirs(bins, params, path=os.getcwd(), J_AGN=None):
 
     # create runs directory
     run_path = os.path.join(path, "cloudy")
@@ -81,8 +81,10 @@ def make_sim_dirs(bins, params, path=os.getcwd(), J=None):
 
         # generate SED
         combo_dict = dict(zip(keys, combo))
-        if J is None:
+        if J_AGN is None:
             J = make_SED(sed_dir, bins, combo_dict)
+        else:
+            J = J_AGN
 
         # write sim.in
         temp = template  # reset template

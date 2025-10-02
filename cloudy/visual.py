@@ -131,7 +131,8 @@ def plot_with_rad(fig, stab1, stab2, bins, params, xquant, idy1=0, idy2=0, **kwa
     # create axes (kept positions from your original layout)
     ax1 = fig.add_axes([0.10, 0.10, 0.35, 0.60])
     ax2 = fig.add_axes([0.55, 0.10, 0.35, 0.60])
-    ax3 = fig.add_axes([0.10, 0.77, 0.60, 0.18])
+    # ax3 = fig.add_axes([0.10, 0.77, 0.60, 0.17])
+    ax3 = fig.add_axes([0.10, 0.77, 0.80, 0.15])
 
     # --- bins handling ---
     edges = np.asarray(bins.edges)
@@ -163,18 +164,18 @@ def plot_with_rad(fig, stab1, stab2, bins, params, xquant, idy1=0, idy2=0, **kwa
         # separate axis for ticks, placed slightly below
         nvals = stab1[axisName].size
         ticks = [f"{p:.1e}" for p in params[axisName]]
-        ax_ticks = fig.add_axes([0.75, slider_top - i*slider_height - 0.001, 0.20, 0.02])
-        ax_ticks.set_xlim(0, nvals-1)
-        ax_ticks.set_xticks(range(nvals))
-        ax_ticks.set_xticklabels(ticks, rotation=45, fontsize=7)
-        ax_ticks.set_yticks([])
-        for spine in ["top", "left", "right"]:
-            ax_ticks.spines[spine].set_visible(False)
+        # ax_ticks = fig.add_axes([0.75, slider_top - i*slider_height - 0.001, 0.20, 0.02])
+        # ax_ticks.set_xlim(0, nvals-1)
+        # ax_ticks.set_xticks(range(nvals))
+        # ax_ticks.set_xticklabels(ticks, rotation=45, fontsize=7)
+        # ax_ticks.set_yticks([])
+        # for spine in ["top", "left", "right"]:
+        #     ax_ticks.spines[spine].set_visible(False)
 
         # main slider axis
-        ax_slider = fig.add_axes([0.75, slider_top - i*slider_height, 0.20, 0.02])
-        sliders[axisName] = Slider(ax_slider, axisName, 0, nvals-1,
-                                   valinit=0, valstep=1)
+        # ax_slider = fig.add_axes([0.75, slider_top - i*slider_height, 0.20, 0.02])
+        # sliders[axisName] = Slider(ax_slider, axisName, 0, nvals-1,
+        #                            valinit=0, valstep=1)
 
         i += 1
 
@@ -202,7 +203,8 @@ def plot_with_rad(fig, stab1, stab2, bins, params, xquant, idy1=0, idy2=0, **kwa
                 sl.append(idx)
             else:
                 # use slider value
-                sl.append(int(sliders[axisName].val))
+                # sl.append(int(sliders[axisName].val))
+                sl.append(0)
         return tuple(sl)
 
     slicer = make_slicer()
@@ -210,26 +212,30 @@ def plot_with_rad(fig, stab1, stab2, bins, params, xquant, idy1=0, idy2=0, **kwa
     yline2 = np.asarray(y2[slicer])
 
     # left plot
-    ax1_line, = ax1.plot(x1, yline1, **kwargs)
+    ax1_line, = ax1.plot(meV/x1, yline1, **kwargs)
     ax1.set_xscale('log')
     ax1.set_yscale('log')
-    ax1.set_title(f"{yquant1}")
-    ax1.set_xlabel(f"{xquant} [{stab1['axisUnits'][stab1['axisNames'].index(xquant)]}]")
-    ax1.set_ylabel(f"{yquant1} [{stab1['quantityUnits'][stab1['quantityNames'].index(yquant1)]}]")
+    # ax1.set_title(f"{yquant1}")
+    # ax1.set_xlabel(f"{xquant} [{stab1['axisUnits'][stab1['axisNames'].index(xquant)]}]")
+    # ax1.set_ylabel(f"{yquant1} [{stab1['quantityUnits'][stab1['quantityNames'].index(yquant1)]}]")
+    ax1.set_xlabel("Energy (eV)")
+    ax1.set_ylabel("Opacity (1/m)")
     ax1.set_ylim(min_y1*0.8, max_y1*1.2)
 
     # right plot
-    ax2_line, = ax2.plot(x2, yline2, **kwargs)
+    ax2_line, = ax2.plot(meV/x2, yline2, **kwargs)
     ax2.set_xscale('log')
     ax2.set_yscale('log')
-    ax2.set_title(f"{yquant2}")
-    ax2.set_xlabel(f"{xquant} [{stab2['axisUnits'][stab2['axisNames'].index(xquant)]}]")
-    ax2.set_ylabel(f"{yquant2} [{stab2['quantityUnits'][stab2['quantityNames'].index(yquant2)]}]")
+    # ax2.set_title(f"{yquant2}")
+    # ax2.set_xlabel(f"{xquant} [{stab2['axisUnits'][stab2['axisNames'].index(xquant)]}]")
+    # ax2.set_ylabel(f"{yquant2} [{stab2['quantityUnits'][stab2['quantityNames'].index(yquant2)]}]")
+    ax2.set_xlabel("Energy (eV)")
+    ax2.set_ylabel("Emissivity (W/m3)")
     ax2.set_ylim(min_y2*0.8, max_y2*1.2)
 
     for e in edges:
-        ax1.axvline(meV/e, color='gray', ls='--', lw=1)
-        ax2.axvline(meV/e, color='gray', ls='--', lw=1)
+        ax1.axvline(e, color='gray', ls='--', lw=1)
+        ax2.axvline(e, color='gray', ls='--', lw=1)
         ax3.axvline(e, color='gray', ls='--', lw=1)
 
     # --- top histogram-like control (ax3) ---
@@ -246,15 +252,18 @@ def plot_with_rad(fig, stab1, stab2, bins, params, xquant, idy1=0, idy2=0, **kwa
     ax3.set_yscale('log')
     hist_line, = ax3.plot(x_step, y_step, lw=2, solid_capstyle='butt')
     markers = ax3.scatter(centers, vals, s=80, zorder=5, picker=True)
-    ax3.set_xlim(edges[0], edges[-1])
+    ax3.set_xlim(edges[-1], edges[0])
     # set reasonable y limits from allowed sets
     all_allowed = np.concatenate(bin_vals)
     pos_allowed = all_allowed[all_allowed > 0]
     if pos_allowed.size:
         ax3.set_ylim(pos_allowed.min()*0.8, pos_allowed.max()*1.2)
-    ax3.set_title("Radiation field bins")
+    # ax3.set_title("Radiation field bins")
     ax3.set_xlabel("Bin edges [eV]")
     ax3.set_ylabel("$J_\\lambda \\Delta \\lambda$ [W/m2]")
+    ax3.xaxis.set_ticks_position("top")
+    ax3.xaxis.set_label_position("top")
+    
 
     # --- interactive handlers ---
     dragging = {'idx': None}
@@ -336,8 +345,8 @@ def plot_with_rad(fig, stab1, stab2, bins, params, xquant, idy1=0, idy2=0, **kwa
 
     def slider_update(val):
         update_main_plots()
-    for s in sliders.values():
-        s.on_changed(slider_update)
+    # for s in sliders.values():
+    #     s.on_changed(slider_update)
 
     # final initial draw
     update_main_plots()
