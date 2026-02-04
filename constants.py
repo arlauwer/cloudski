@@ -1,0 +1,4 @@
+NUMBINS = 24
+DIM = 2 + NUMBINS
+LIBLOCATION = "../AGN/lib/"
+OUTLOCATION = "../AGN/out/"

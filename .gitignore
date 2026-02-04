@@ -1,13 +1,5 @@
-# data
-img/
-runs/
-stab/
-
-#old
-old/
-
-# temp
-nohup.out
-
 # cache
 __pycache__/
+
+# vscode
+.vscode
