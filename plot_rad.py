@@ -4,14 +4,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 from read_rad import *
+from read_props import *
 
 
-def slider_plot_rad(fig, edges, widths, rads):
+def slider_plot_rad(fig, edges, widths, rads, props):
     ax = fig.add_subplot(111)
     fig.subplots_adjust(bottom=0.2)
 
+    num_iter, num_cells, num_bins = rads.shape
+
     # initial plot
     bar = ax.bar(edges[:-1], rads[0, 0, :], width=widths, align='edge', edgecolor='black', linewidth=0.5)
+
+    # Update the title
+    prop = props[0]
+    c, x, z = int(prop[0]), prop[1], prop[3]
+    ax.set_title(f"Cell {0:03d}={c:03d} at (x,z)=({x:.2f},{z:.2f}) pc")
 
     # sliders
     ax_slider_iter = plt.axes([0.15, 0.05, 0.7, 0.05])
@@ -47,10 +55,15 @@ def slider_plot_rad(fig, edges, widths, rads):
         iter = int(slider_iter.val)
         cell = int(slider_cell.val)
 
+        # Update the heights of the bars
         new_heights = rads[iter, cell, :]
-
         for rect, h in zip(bar, new_heights):
             rect.set_height(h)
+
+        # Update the title
+        prop = props[cell]
+        c, x, z = int(prop[0]), prop[1], prop[3]
+        ax.set_title(f"Cell {cell:03d}={c:03d} at (x,z)=({x:.2f},{z:.2f}) pc")
 
         fig.canvas.draw_idle()
 
@@ -60,16 +73,19 @@ def slider_plot_rad(fig, edges, widths, rads):
     return slider_iter, slider_cell
 
 
-edges, widths = read_wav()
-rads = read_rads()
+if __name__ == "__main__":
 
-num_iter = rads.shape[0]
-num_cells = rads.shape[1]
-num_bins = rads.shape[2]
-print("Number of (iterations, cells, bins):", rads.shape)
+    edges, widths = read_wav()
+    rads = read_rads()
+    props = radial_props()
 
-fig = plt.figure(figsize=(16, 8))
+    print("Number of (iterations, cells, bins):", rads.shape)
 
-sliders = slider_plot_rad(fig, edges, widths, rads)
+    assert widths.shape[0] == rads.shape[2]  # Amount of bins
+    assert props.shape[0] == rads.shape[1]  # Amount of cells
 
-plt.show()
+    fig = plt.figure(figsize=(16, 8))
+
+    sliders = slider_plot_rad(fig, edges, widths, rads, props)
+
+    plt.show()

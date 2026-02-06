@@ -27,7 +27,7 @@ def radial_props():
     """
     allc = all_props()
     # There is 4 inclination bins per radius and the 2nd one (index 1) is the first one with a non-zero density
-    return allc[1::4]
+    return allc[CELL_INDICES]
 
 
 def all_cell_positions():

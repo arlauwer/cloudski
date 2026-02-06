@@ -20,10 +20,13 @@ def read_rad(i):
     dat = np.loadtxt(filename)
 
     print("Read", filename)
-    return dat[:, 1:]  # Remove cell indices
+    return dat[CELL_INDICES, 1:]  # Remove cell indices
 
 
 def read_rads():
+    """
+    (iterations, cells, bins)
+    """
     num_iter = len(ALL_RGRID_FILES())
 
     rads = []
