@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.collections import EllipseCollection
 from matplotlib.widgets import Slider
-from read_hnsw import *
+from ../read_hnsw import *
 from space import *
 
 

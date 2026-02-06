@@ -1,7 +1,7 @@
 NUMBINS = 24
 DIM = 2 + NUMBINS
-LIBLOCATION = "../AGN/lib/"
-OUTLOCATION = "../AGN/out/"
+LIBLOCATION = "/home/arno/Documents/UGent/PhD/run/ionised/knn/AGN/lib/"
+OUTLOCATION = "/home/arno/Documents/UGent/PhD/run/ionised/knn/AGN/out/"
 
 # Distance Factors
 MAX_DIST = 0.5
@@ -15,7 +15,7 @@ SKI = "AGN"
 # PROBE_INFO = "conv" # unused
 # PROBE_CUTS = "cuts" # unused
 # PROBE_GRID = "grid" # unused
-# PROBE_OPAC = "opac" # unused
+PROBE_OPAC = "opac"
 PROBE_PROP = "prop"
 PROBE_RWAV = "rad-wav"
 PROBE_RGRID = "rad-grid"

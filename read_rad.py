@@ -4,7 +4,7 @@ from constants import *
 from read_probes import *
 
 
-def read_wav():
+def read_rad_wav():
     # left and right edges of the bins
     widths, lborder, rborder = np.loadtxt(RWAV_FILE(), usecols=(1, 2, 3)).T
     num_wav = lborder.size
@@ -19,7 +19,6 @@ def read_rad(i):
 
     dat = np.loadtxt(filename)
 
-    print("Read", filename)
     return dat[CELL_INDICES, 1:]  # Remove cell indices
 
 

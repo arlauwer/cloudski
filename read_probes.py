@@ -26,3 +26,13 @@ def RGRID_FILE(i):
 
 def ALL_RGRID_FILES():
     return glob.glob(PROBE(PROBE_RGRID)+"*_J.dat")
+
+
+# OPAC
+
+def OPAC_FILE(i):
+    return PROBE(PROBE_OPAC)+f"{i+1:03d}"+"_k.dat"
+
+
+def ALL_OPAC_FILES():
+    return glob.glob(PROBE(PROBE_OPAC)+"*_k.dat")
